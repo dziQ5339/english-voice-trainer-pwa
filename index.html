@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#102a43" />
+  <meta name="description" content="Prosta aplikacja PWA do głosowej nauki angielskich słówek i zdań z własnej listy." />
+  <title>Angielski Głosowo</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <noscript>Ta aplikacja wymaga włączonego JavaScript.</noscript>
+
+  <header class="app-header">
+    <div>
+      <h1>Angielski Głosowo</h1>
+      <p>Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku.</p>
+    </div>
+    <span id="installStatus" class="pill">PWA</span>
+  </header>
+
+  <main class="layout">
+    <section class="card learning-card" aria-labelledby="learningTitle">
+      <div class="card-header">
+        <h2 id="learningTitle">Nauka</h2>
+        <div class="mode-row">
+          <label for="studyMode">Tryb</label>
+          <select id="studyMode">
+            <option value="all">Pełna lista</option>
+            <option value="review">Lista powtórek</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div id="progressText" class="progress-text">Para 0 z 0</div>
+        <div class="progress-bar" aria-hidden="true"><span id="progressBar"></span></div>
+      </div>
+
+      <div class="pair-box">
+        <div class="pair-number" id="pairNumber">Nr —</div>
+        <div class="label">Polski</div>
+        <div id="polishText" class="main-text">Zaimportuj listę i naciśnij Start.</div>
+      </div>
+
+      <div class="answer-box">
+        <div class="label">Rozpoznana odpowiedź użytkownika</div>
+        <div id="recognizedText" class="recognized-text">—</div>
+      </div>
+
+      <div class="answer-box correct-answer" id="correctAnswerBox" hidden>
+        <div class="label">Poprawne tłumaczenie po angielsku</div>
+        <div id="englishText" class="main-text english">—</div>
+      </div>
+
+      <div class="answer-box evaluation-box" id="evaluationBox" hidden>
+        <div class="label">Prosta ocena odpowiedzi</div>
+        <div class="evaluation-score" id="evaluationScore">—</div>
+        <div id="evaluationComment" class="evaluation-comment">—</div>
+        <div class="evaluation-details">
+          <div><strong>Brakuje:</strong> <span id="missingWords">—</span></div>
+          <div><strong>Nadmiarowe / inne:</strong> <span id="extraWords">—</span></div>
+        </div>
+      </div>
+
+      <div id="status" class="status" role="status">Gotowe.</div>
+
+      <div class="button-grid primary-buttons">
+        <button id="startBtn" class="btn btn-primary">Start</button>
+        <button id="captureAnswerBtn" class="btn">Odpowiedź EN</button>
+        <button id="checkBtn" class="btn">Sprawdź</button>
+        <button id="clearAnswerBtn" class="btn">Wyczyść odpowiedź</button>
+        <button id="nextBtn" class="btn">Następne</button>
+        <button id="prevBtn" class="btn">Poprzednie</button>
+        <button id="repeatBtn" class="btn">Powtórz</button>
+        <button id="addReviewBtn" class="btn">Dodaj do listy powtórek</button>
+        <button id="showReviewBtn" class="btn">Lista powtórek</button>
+        <button id="stopBtn" class="btn btn-danger">Stop</button>
+      </div>
+
+      <details class="commands">
+        <summary>Obsługiwane komendy głosowe</summary>
+        <p><strong>start</strong>, <strong>stop</strong>, <strong>sprawdź</strong>, <strong>następne</strong>, <strong>poprzednie</strong>, <strong>powtórz</strong>, <strong>dodaj do listy</strong>, <strong>pokaż listę powtórek</strong>. Przy języku rozpoznawania <strong>en-US</strong> działają też proste komendy angielskie: <strong>check</strong>, <strong>next</strong>, <strong>previous</strong>, <strong>repeat</strong>, <strong>start</strong>, <strong>stop</strong>.</p>
+      </details>
+    </section>
+
+    <section class="card" aria-labelledby="importTitle">
+      <h2 id="importTitle">Import danych</h2>
+      <p class="hint">Wklej dane rozdzielone średnikiem, tabulatorem albo przecinkiem. Nagłówek może być obecny.</p>
+      <textarea id="importText" rows="8" spellcheck="false">Nr;Polski;English
+1;dzień dobry;good morning
+2;Chciałbym zamówić kawę.;I would like to order a coffee.
+3;Gdzie jest dworzec?;Where is the train station?</textarea>
+      <div class="button-row">
+        <button id="importTextBtn" class="btn btn-primary">Importuj tekst</button>
+        <label class="file-label btn">
+          Import CSV
+          <input id="csvFile" type="file" accept=".csv,text/csv" />
+        </label>
+        <button id="clearDataBtn" class="btn btn-danger">Wyczyść dane</button>
+      </div>
+      <div id="importInfo" class="small-info">Brak zaimportowanych danych.</div>
+    </section>
+
+    <section class="card" aria-labelledby="settingsTitle">
+      <h2 id="settingsTitle">Ustawienia mowy</h2>
+
+      <div class="settings-grid">
+        <label>
+          Szybkość odczytu
+          <input id="rateInput" type="range" min="0.5" max="1.6" step="0.1" value="1" />
+          <span id="rateValue">1.0</span>
+        </label>
+
+        <label>
+          Głośność
+          <input id="volumeInput" type="range" min="0" max="1" step="0.1" value="1" />
+          <span id="volumeValue">1.0</span>
+        </label>
+
+        <label>
+          Głos polski
+          <select id="voicePl"></select>
+        </label>
+
+        <label>
+          Głos angielski
+          <select id="voiceEn"></select>
+        </label>
+
+        <label>
+          Język rozpoznawania mowy
+          <select id="recognitionLang">
+            <option value="pl-PL">Polski — najlepsze komendy</option>
+            <option value="en-US">Angielski — lepsza transkrypcja odpowiedzi</option>
+          </select>
+        </label>
+
+        <label class="checkbox-label">
+          <input id="evaluateAnswer" type="checkbox" />
+          Oceniaj rozpoznaną odpowiedź po angielsku
+        </label>
+
+        <label class="checkbox-label">
+          <input id="autoLanguageSwitch" type="checkbox" />
+          Automatycznie przełączaj: odpowiedź EN → komendy PL
+        </label>
+      </div>
+
+      <div class="button-row">
+        <button id="micBtn" class="btn">Włącz mikrofon</button>
+        <button id="testPlBtn" class="btn">Test PL</button>
+        <button id="testEnBtn" class="btn">Test EN</button>
+      </div>
+      <div id="speechInfo" class="small-info">Rozpoznawanie mowy zostanie sprawdzone po uruchomieniu.</div>
+    </section>
+
+    <section class="card full-width" aria-labelledby="reviewTitle">
+      <div class="card-header">
+        <h2 id="reviewTitle">Lista powtórek</h2>
+        <div class="button-row compact">
+          <button id="studyReviewBtn" class="btn">Ucz się z powtórek</button>
+          <button id="exportReviewBtn" class="btn">Eksport CSV</button>
+          <button id="clearReviewBtn" class="btn btn-danger">Wyczyść listę</button>
+        </div>
+      </div>
+      <div id="reviewList" class="review-list">Lista powtórek jest pusta.</div>
+    </section>
+  </main>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
