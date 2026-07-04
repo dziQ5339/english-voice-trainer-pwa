@@ -16,7 +16,8 @@
     recognitionLang: 'pl-PL',
     evaluationMode: 'simple',
     autoMic: true,
-    autoLanguageSwitch: true
+    autoLanguageSwitch: true,
+    keepScreenAwake: true
   };
 
   const state = {
@@ -31,6 +32,8 @@
     voices: [],
     recognizedAnswer: '',
     currentFeedback: null,
+    wakeLock: null,
+    wakeLockSupported: false,
     restartRecognitionAfterSpeech: false,
     changingRecognitionLanguage: false,
     deferredInstallPrompt: null,
@@ -87,6 +90,7 @@
     evaluationMode: document.getElementById('evaluationMode'),
     autoMic: document.getElementById('autoMic'),
     autoLanguageSwitch: document.getElementById('autoLanguageSwitch'),
+    keepScreenAwake: document.getElementById('keepScreenAwake'),
     micBtn: document.getElementById('micBtn'),
     testPlBtn: document.getElementById('testPlBtn'),
     testEnBtn: document.getElementById('testEnBtn'),
@@ -104,6 +108,7 @@
     bindEvents();
     setupPwa();
     setupSpeechRecognition();
+    setupWakeLock();
     loadVoices();
     applySettingsToUi();
     renderAll();
@@ -196,6 +201,19 @@
         : 'Automatyczne przełączanie języka jest wyłączone. Użyj ręcznie pola „Język rozpoznawania mowy”.');
     });
 
+    el.keepScreenAwake.addEventListener('change', async () => {
+      state.settings.keepScreenAwake = el.keepScreenAwake.checked;
+      saveSettings();
+      if (state.settings.keepScreenAwake && state.running) {
+        await requestWakeLock();
+      } else {
+        await releaseWakeLock();
+      }
+      setStatus(state.settings.keepScreenAwake
+        ? 'Opcja niewygaszania ekranu jest włączona.'
+        : 'Opcja niewygaszania ekranu jest wyłączona.');
+    });
+
     el.micBtn.addEventListener('click', toggleListening);
     el.testPlBtn.addEventListener('click', () => speak('To jest test polskiego głosu.', 'pl-PL'));
     el.testEnBtn.addEventListener('click', () => speak('This is a test of the English voice.', 'en-US'));
@@ -243,9 +261,11 @@
     el.volumeInput.value = String(state.settings.volume);
     el.volumeValue.textContent = Number(state.settings.volume).toFixed(1);
     el.recognitionLang.value = state.settings.recognitionLang;
+    if (!['none', 'simple', 'medium', 'advanced'].includes(state.settings.evaluationMode)) state.settings.evaluationMode = 'simple';
     el.evaluationMode.value = state.settings.evaluationMode || 'simple';
     el.autoMic.checked = Boolean(state.settings.autoMic);
     el.autoLanguageSwitch.checked = Boolean(state.settings.autoLanguageSwitch);
+    el.keepScreenAwake.checked = Boolean(state.settings.keepScreenAwake);
   }
 
   function setupPwa() {
@@ -274,6 +294,49 @@
 
   function setInstallStatus(text) {
     el.installStatus.textContent = text;
+  }
+
+  function setupWakeLock() {
+    state.wakeLockSupported = 'wakeLock' in navigator;
+    if (!state.wakeLockSupported && el.keepScreenAwake) {
+      el.keepScreenAwake.title = 'Ta przeglądarka nie obsługuje Screen Wake Lock API albo strona nie działa przez HTTPS.';
+    }
+
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible' && state.running && state.settings.keepScreenAwake) {
+        await requestWakeLock();
+      }
+    });
+  }
+
+  async function requestWakeLock() {
+    if (!state.settings.keepScreenAwake || !state.running) return;
+    if (!('wakeLock' in navigator)) {
+      setStatus('Ta przeglądarka nie obsługuje blokady wygaszania ekranu albo aplikacja nie działa przez HTTPS.', 'warning');
+      return;
+    }
+
+    try {
+      if (state.wakeLock) return;
+      state.wakeLock = await navigator.wakeLock.request('screen');
+      state.wakeLock.addEventListener('release', () => {
+        state.wakeLock = null;
+      });
+      setStatus('Ekran nie powinien się wygaszać podczas nauki.');
+    } catch (err) {
+      setStatus(`Nie udało się włączyć blokady wygaszania ekranu: ${err.message || err.name}.`, 'warning');
+    }
+  }
+
+  async function releaseWakeLock() {
+    if (!state.wakeLock) return;
+    try {
+      await state.wakeLock.release();
+    } catch (err) {
+      // System albo przeglądarka mogły zwolnić blokadę wcześniej.
+    } finally {
+      state.wakeLock = null;
+    }
   }
 
   function setupSpeechRecognition() {
@@ -460,7 +523,7 @@
 
       if (state.settings.autoLanguageSwitch && state.running) {
         setRecognitionLanguage('pl-PL', true);
-        setStatus('Odpowiedź zapisana. Powiedz „sprawdź” albo kliknij przycisk Sprawdź.');
+        setStatus('Odpowiedź zapisana. Powiedz „test” albo kliknij przycisk Sprawdź.');
       }
       return;
     }
@@ -489,19 +552,40 @@
       .trim();
   }
 
+  const VOICE_COMMANDS = {
+    check: ['test', 'sprawdz', 'sprawdzam', 'check'],
+    next: ['dalej', 'nastepne', 'nastepny', 'next'],
+    prev: ['cofnij', 'wstecz', 'poprzednie', 'poprzedni', 'back', 'previous'],
+    repeat: ['jeszcze', 'powtorz', 'powtor', 'repeat'],
+    addReview: ['dodaj', 'dodaj do listy', 'dodaj do powtorek', 'add'],
+    showReview: ['lista', 'lista powtorek', 'pokaz liste', 'pokaz liste powtorek', 'review list'],
+    captureAnswer: ['mowie', 'angielski', 'odpowiedz', 'answer'],
+    clearAnswer: ['kasuj', 'wyczysc', 'clear'],
+    start: ['start', 'rozpocznij'],
+    stop: ['stop', 'zatrzymaj']
+  };
+
   function detectCommand(text) {
     const t = normalizeCommand(text);
-    const includesAny = (...words) => words.some((word) => t.includes(word));
+    if (!t) return null;
 
-    if (includesAny('pokaz liste powtorek', 'pokaz liste', 'lista powtorek', 'show review list')) return 'showReview';
-    if (includesAny('dodaj do listy', 'dodaj do powtorek', 'dodaj liste', 'dodaj', 'add to list', 'add review')) return 'addReview';
-    if (includesAny('sprawdz', 'sprawdzam', 'check')) return 'check';
-    if (includesAny('nastepne', 'nastepny', 'dalej', 'next')) return 'next';
-    if (includesAny('poprzednie', 'poprzedni', 'wstecz', 'previous', 'back')) return 'prev';
-    if (includesAny('powtorz', 'powtor', 'repeat')) return 'repeat';
-    if (includesAny('start', 'rozpocznij')) return 'start';
-    if (includesAny('stop', 'zatrzymaj')) return 'stop';
+    const commandText = t.startsWith('komenda ') ? t.slice(8).trim() : t;
+    for (const [command, aliases] of Object.entries(VOICE_COMMANDS)) {
+      if (aliases.some((alias) => commandMatches(commandText, alias))) return command;
+    }
     return null;
+  }
+
+  function commandMatches(text, alias) {
+    if (text === alias) return true;
+
+    const words = text.split(' ').filter(Boolean);
+    const aliasWords = alias.split(' ').filter(Boolean);
+    if (words.length > aliasWords.length + 1) return false;
+
+    return text === `no ${alias}`
+      || text === `${alias} prosze`
+      || text === `${alias} teraz`;
   }
 
   function runCommand(command) {
@@ -512,6 +596,8 @@
       next: nextPair,
       prev: prevPair,
       repeat: repeatCurrent,
+      captureAnswer: () => prepareForEnglishAnswer(true),
+      clearAnswer: clearCurrentAnswer,
       addReview: addCurrentToReview,
       showReview: scrollToReview
     };
@@ -664,11 +750,12 @@
     resetCurrentAnswer();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
+    requestWakeLock();
     renderLearning();
     renderLoadedPairs();
 
     const pair = getCurrentPair();
-    setStatus(`Start od numeru ${pair.nr}. Podaj odpowiedź po angielsku, a potem powiedz „sprawdź”.`);
+    setStatus(`Start od numeru ${pair.nr}. Podaj odpowiedź po angielsku, a potem powiedz „test”.`);
     if (readPolish) speak(pair.pl, 'pl-PL');
   }
 
@@ -696,8 +783,9 @@
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
+    requestWakeLock();
     renderLoadedPairs();
-    setStatus('Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „sprawdź”. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
+    setStatus('Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „test” albo kliknij Sprawdź. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
     speak(pair.pl, 'pl-PL');
   }
 
@@ -706,6 +794,7 @@
     state.listening = false;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     safeStopRecognition(false);
+    releaseWakeLock();
     el.micBtn.textContent = 'Włącz mikrofon';
     setStatus('Zatrzymano naukę.');
   }
@@ -749,7 +838,7 @@
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
-    setStatus('Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „sprawdź”.');
+    setStatus('Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
     speak(pair.pl, 'pl-PL');
   }
 
@@ -771,7 +860,7 @@
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
-    setStatus('Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „sprawdź”.');
+    setStatus('Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
     speak(pair.pl, 'pl-PL');
   }
 
@@ -1101,6 +1190,7 @@
 
   function getEvaluationModeLabel(mode) {
     const labels = {
+      none: 'Brak oceny',
       simple: 'Ocena prosta',
       medium: 'Ocena średnia',
       advanced: 'Ocena zaawansowana lokalna'
@@ -1110,6 +1200,7 @@
 
   function evaluateCurrentAnswer(pair) {
     const mode = state.settings.evaluationMode || 'simple';
+    if (mode === 'none') return null;
     const expected = normalizeForComparison(pair.en);
     const actual = normalizeForComparison(state.recognizedAnswer);
     const expectedWords = tokenizeComparable(expected);

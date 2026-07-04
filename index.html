@@ -17,7 +17,7 @@
   <header class="app-header">
     <div>
       <h1>Angielski Głosowo</h1>
-      <p>Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki w imporcie CSV i komendach głosowych.</p>
+      <p>Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki, proste komendy głosowe oraz opcję niewygaszania ekranu podczas nauki.</p>
     </div>
     <span id="installStatus" class="pill">PWA</span>
   </header>
@@ -64,7 +64,7 @@
       </div>
 
       <div class="answer-box evaluation-box" id="evaluationBox" hidden>
-        <div class="label">Prosta ocena odpowiedzi</div>
+        <div class="label">Ocena odpowiedzi</div>
         <div class="evaluation-score" id="evaluationScore">—</div>
         <div id="evaluationComment" class="evaluation-comment">—</div>
         <div class="evaluation-details">
@@ -93,7 +93,8 @@
 
       <details class="commands">
         <summary>Obsługiwane komendy głosowe</summary>
-        <p><strong>start</strong>, <strong>stop</strong>, <strong>sprawdź</strong>, <strong>następne</strong>, <strong>poprzednie</strong>, <strong>powtórz</strong>, <strong>dodaj do listy</strong>, <strong>pokaż listę powtórek</strong>. Komendy działają także wtedy, gdy przeglądarka rozpozna je bez polskich znaków, np. <strong>sprawdz</strong>, <strong>nastepne</strong>, <strong>powtorz</strong>. Przy języku rozpoznawania <strong>en-US</strong> działają też proste komendy angielskie: <strong>check</strong>, <strong>next</strong>, <strong>previous</strong>, <strong>repeat</strong>, <strong>start</strong>, <strong>stop</strong>.</p>
+        <p>Główne, najprostsze komendy: <strong>test</strong> = sprawdź, <strong>dalej</strong> = następne, <strong>cofnij</strong> = poprzednie, <strong>jeszcze</strong> = powtórz, <strong>dodaj</strong> = dodaj do powtórek, <strong>lista</strong> = pokaż powtórki, <strong>mówię</strong> = odpowiedź po angielsku, <strong>kasuj</strong> = wyczyść odpowiedź, <strong>start</strong>, <strong>stop</strong>.</p>
+        <p>Działają też starsze komendy: <strong>sprawdź</strong>, <strong>następne</strong>, <strong>poprzednie</strong>, <strong>powtórz</strong>, <strong>dodaj do listy</strong>, <strong>pokaż listę powtórek</strong>. Komendy mogą być rozpoznane bez polskich znaków, np. <strong>sprawdz</strong>, <strong>powtorz</strong>.</p>
       </details>
     </section>
 
@@ -179,6 +180,7 @@
         <label>
           Tryb oceny odpowiedzi po angielsku
           <select id="evaluationMode">
+            <option value="none">BRAK — nie oceniaj wypowiedzi</option>
             <option value="simple">Ocena prosta</option>
             <option value="medium">Ocena średnia</option>
             <option value="advanced">Ocena zaawansowana lokalna</option>
@@ -193,6 +195,11 @@
         <label class="checkbox-label">
           <input id="autoLanguageSwitch" type="checkbox" />
           Automatycznie przełączaj: odpowiedź EN → komendy PL
+        </label>
+
+        <label class="checkbox-label">
+          <input id="keepScreenAwake" type="checkbox" />
+          Nie wygaszaj ekranu podczas nauki
         </label>
       </div>
 
