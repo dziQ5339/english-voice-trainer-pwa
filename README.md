@@ -1,31 +1,87 @@
-# Angielski Głosowo — prosta aplikacja PWA — v3
+# Angielski Głosowo — prosta aplikacja PWA — v5
 
 Aplikacja do głosowej nauki angielskich słówek i zdań z własnej listy par: tekst po polsku oraz odpowiadający mu tekst po angielsku.
 
-## 1. Architektura aplikacji
+## 1. Co zmieniono w wersji v5
+
+Wersja v5 rozbudowuje wersję v4 o obsługę polskich znaków w imporcie CSV oraz w rozpoznawaniu komend głosowych. Wersja v4 zawierała wcześniej następujące funkcje:
+
+1. **Mikrofon domyślnie utrzymywany jako włączony podczas nauki**
+   - po kliknięciu `Start` aplikacja próbuje uruchomić nasłuch,
+   - po błędzie `no-speech` aplikacja nie wyłącza trwale mikrofonu,
+   - `Stop` zatrzymuje naukę i wyłącza mikrofon,
+   - jeżeli przeglądarka blokuje mikrofon, aplikacja pokazuje komunikat o uprawnieniach.
+
+2. **Podgląd załadowanych słów i zdań**
+   - po imporcie widoczna jest przewijana tabela załadowanych par,
+   - kolumny: `Nr`, `Polski`, `English`,
+   - aktualna para jest wyróżniona,
+   - kliknięcie w wiersz przechodzi do wybranej pary.
+
+3. **Start nauki od dowolnego numeru pary**
+   - dodano pole `Start od nr`,
+   - aplikacja szuka oryginalnego numeru z kolumny `Nr`, a nie indeksu tablicy,
+   - po przejściu do wybranej pary odczytuje tekst po polsku.
+
+4. **Osobna szybkość odczytu dla języka polskiego i angielskiego**
+   - `Szybkość głosu PL`,
+   - `Szybkość głosu EN`,
+   - ustawienia zapisują się lokalnie w `localStorage`.
+
+5. **Trzy tryby oceny odpowiedzi po angielsku**
+   - `Ocena prosta`,
+   - `Ocena średnia`,
+   - `Ocena zaawansowana lokalna`.
+
+6. **Lepsza obsługa polskich znaków — nowość w v5**
+   - import CSV obsługuje `UTF-8`, `Windows-1250` oraz `ISO-8859-2`,
+   - pliki CSV utworzone w Excelu w polskiej wersji Windows powinny poprawniej zachowywać znaki `ą ć ę ł ń ó ś ź ż`,
+   - komendy głosowe działają zarówno z polskimi znakami, jak i bez nich, np. `sprawdź` / `sprawdz`, `następne` / `nastepne`, `powtórz` / `powtorz`,
+   - tekst importowany ręcznie jest normalizowany do poprawnej postaci Unicode `NFC`,
+   - eksport listy powtórek nadal zapisuje CSV jako `UTF-8` z BOM, żeby Excel poprawniej widział polskie znaki.
+
+## 2. Ważna uwaga o ocenie zaawansowanej
+
+Tryb `Ocena zaawansowana lokalna` działa **bez zewnętrznego API**. Nie wysyła głosu ani tekstu do OpenAI, Azure ani innej usługi. Jest to ocena heurystyczna wykonywana w JavaScript w przeglądarce.
+
+Ten tryb analizuje m.in.:
+
+- podobieństwo rozpoznanego tekstu do poprawnej odpowiedzi,
+- brakujące istotne słowa,
+- brakujące przedimki `a`, `an`, `the`,
+- brakujące czasowniki pomocnicze lub modalne, np. `would`, `can`, `should`,
+- kolejność słów,
+- ogólną naturalność odpowiedzi względem wzorca.
+
+Nie jest to pełna profesjonalna analiza fonetyczna wymowy. Aplikacja nadal ocenia głównie to, **co przeglądarka rozpoznała jako tekst**, a nie dokładną artykulację głosek, akcent, rytm i intonację.
+
+Prawdziwa ocena wymowy typu `accuracy`, `fluency`, `prosody` wymagałaby zewnętrznego silnika, np. Azure AI Speech Pronunciation Assessment albo własnego backendu korzystającego z modelu AI. Klucza API nie należy umieszczać bezpośrednio w kodzie frontendowym PWA.
+
+## 3. Architektura aplikacji
 
 Aplikacja jest prostą aplikacją webową PWA bez backendu.
 
 Warstwy:
 
-1. `index.html` — struktura ekranu, przyciski, import danych, lista powtórek, ustawienia mowy.
-2. `styles.css` — responsywny interfejs przystosowany do telefonu: duży tekst, duże przyciski, układ kart.
+1. `index.html` — struktura ekranu, przyciski, import danych, podgląd par, lista powtórek i ustawienia.
+2. `styles.css` — responsywny interfejs przystosowany do telefonu: duży tekst, duże przyciski, układ kart, przewijana tabela.
 3. `app.js` — cała logika aplikacji:
-   - import CSV lub tekstu,
+   - import CSV lub tekstu, w tym plików z polskimi znakami w kodowaniu UTF-8, Windows-1250 i ISO-8859-2,
    - przechodzenie po parach w kolejności,
-   - synteza mowy PL/EN,
+   - start od konkretnego numeru pary,
+   - synteza mowy PL/EN z osobnymi szybkościami,
    - rozpoznawanie komend głosowych,
-   - proste porównanie rozpoznanej odpowiedzi po angielsku z poprawną odpowiedzią,
-   - krótki komentarz głosowy po sprawdzeniu odpowiedzi,
+   - automatyczne utrzymywanie mikrofonu,
+   - trzy tryby oceny rozpoznanej odpowiedzi po angielsku,
    - automatyczne przełączanie rozpoznawania: odpowiedź EN → komendy PL,
    - lista powtórek,
    - eksport listy powtórek do CSV,
    - zapis danych w `localStorage`.
-4. `manifest.webmanifest` — konfiguracja PWA: nazwa, ikony, tryb standalone, kolor motywu.
-5. `sw.js` — service worker, czyli cache plików aplikacji i podstawowe działanie offline.
+4. `manifest.webmanifest` — konfiguracja PWA.
+5. `sw.js` — service worker i cache plików aplikacji.
 6. `sample.csv` — przykładowy plik z parami słówek i zdań.
 
-## 2. Technologie
+## 4. Technologie
 
 - HTML5
 - CSS3
@@ -39,10 +95,10 @@ Warstwy:
   - ikony aplikacji.
 - `localStorage` do lokalnego zapisu danych w przeglądarce.
 
-## 3. Struktura plików
+## 5. Struktura plików
 
 ```text
-english-voice-trainer-pwa/
+english-voice-trainer-pwa-v5/
 ├── index.html
 ├── styles.css
 ├── app.js
@@ -55,82 +111,20 @@ english-voice-trainer-pwa/
     └── icon-512.png
 ```
 
-## 4. Funkcje
+## 6. Komendy głosowe
 
-- Import listy przez wklejenie tekstu.
-- Import pliku CSV.
-- Obsługa separatorów: średnik, tabulator, przecinek.
-- Kolejność nauki zgodna z listą.
-- Wyświetlanie numeru aktualnej pary.
-- Odczytywanie tekstu polskiego.
-- Odczytywanie odpowiedzi angielskiej dopiero po komendzie lub przycisku `Sprawdź`.
-- Prosta ocena rozpoznanej odpowiedzi po angielsku: procent podobieństwa, brakujące słowa, nadmiarowe/inne słowa.
-- Krótki komentarz głosowy po sprawdzeniu, np. `Bardzo dobrze`, `Dobrze`, `Częściowo dobrze`, `Spróbuj jeszcze raz`.
-- Automatyczne przełączanie języka rozpoznawania: `en-US` do odpowiedzi i `pl-PL` do komend.
-- Brak automatycznego przechodzenia do kolejnej pary po sprawdzeniu.
-- Obsługa przyciskami i komendami głosowymi.
-- Lista powtórek.
-- Tryb nauki tylko z listy powtórek.
-- Usuwanie pozycji z listy powtórek.
-- Czyszczenie listy powtórek.
-- Eksport listy powtórek do CSV.
-- Lokalny zapis danych w przeglądarce.
-- Podstawowe działanie jako PWA.
-
-## 5. Komendy głosowe
-
-Program rozpoznaje następujące komendy:
+Program rozpoznaje następujące komendy. W wersji v5 komendy mogą być rozpoznane z polskimi znakami albo bez nich:
 
 - `start`
 - `stop`
-- `sprawdź`
-- `następne`
+- `sprawdź` / `sprawdz`
+- `następne` / `nastepne`
 - `poprzednie`
-- `powtórz`
+- `powtórz` / `powtorz`
 - `dodaj do listy`
 - `pokaż listę powtórek`
 
-Uwaga: rozpoznawanie komend działa najpewniej przy ustawieniu języka rozpoznawania na `pl-PL`. Przy ustawieniu `en-US` transkrypcja odpowiedzi angielskiej może być lepsza, ale polskie komendy mogą działać gorzej.
-
-W wersji v3 dodano też proste komendy angielskie przy rozpoznawaniu `en-US`: `check`, `next`, `previous`, `repeat`, `start`, `stop`.
-
-
-## 6. Prosta ocena odpowiedzi — v3
-
-Ta wersja dodaje wariant prosty, bez zewnętrznych usług AI.
-
-Jak działa ocena:
-
-1. Aplikacja zapisuje tekst rozpoznany z Twojej odpowiedzi po angielsku.
-2. Po kliknięciu lub powiedzeniu `sprawdź` pokazuje poprawne tłumaczenie.
-3. Następnie porównuje rozpoznany tekst z poprawną odpowiedzią.
-4. Pokazuje wynik procentowy, brakujące słowa i słowa nadmiarowe/inne.
-5. Odczytuje krótki komentarz głosowy po polsku.
-
-Przykład:
-
-```text
-Poprawna odpowiedź: I would like to order a coffee.
-Rozpoznana odpowiedź: I would like order coffee.
-Ocena: około 80%
-Komentarz: Dobrze. Są drobne różnice. Brakuje: to, a.
-```
-
-To nie jest profesjonalna analiza fonetyczna wymowy. Jest to praktyczne sprawdzenie, czy przeglądarka zrozumiała wypowiedź podobnie do poprawnego tekstu. Jeżeli mikrofon, hałas albo silnik rozpoznawania mowy zadziała słabo, ocena może być zaniżona.
-
-### Zalecany sposób użycia
-
-1. Włącz mikrofon.
-2. Zostaw włączoną opcję `Automatycznie przełączaj: odpowiedź EN → komendy PL`.
-3. Naciśnij `Start`.
-4. Aplikacja przeczyta tekst po polsku.
-5. Powiedz odpowiedź po angielsku.
-6. Po rozpoznaniu odpowiedzi aplikacja przełączy się na komendy po polsku.
-7. Powiedz `sprawdź` albo kliknij `Sprawdź`.
-8. Aplikacja pokaże odpowiedź, wynik i komentarz.
-9. Powiedz `następne` albo kliknij `Następne`.
-
-Jeżeli aplikacja nie łapie odpowiedzi po angielsku, kliknij przycisk `Odpowiedź EN`. Ten przycisk ustawia rozpoznawanie na angielski i uruchamia mikrofon, jeżeli był wyłączony.
+Przy rozpoznawaniu `en-US` działają też proste komendy angielskie: `check`, `next`, `previous`, `repeat`, `start`, `stop`.
 
 ## 7. Uruchomienie na komputerze
 
@@ -140,10 +134,8 @@ Najprostsza metoda:
 2. Wejdź do katalogu projektu.
 3. Uruchom lokalny serwer HTTP.
 
-Przykład dla Pythona:
-
 ```bash
-cd english-voice-trainer-pwa
+cd english-voice-trainer-pwa-v5
 python -m http.server 8000
 ```
 
@@ -153,21 +145,23 @@ Następnie otwórz w przeglądarce:
 http://localhost:8000
 ```
 
-Dlaczego nie wystarczy dwuklik na `index.html`?
-
-- Service worker i część funkcji PWA wymagają uruchomienia przez `http://localhost` albo przez `https://`.
-- Rozpoznawanie mowy i mikrofon również zwykle wymagają bezpiecznego kontekstu: `https://` albo `localhost`.
+Nie zaleca się uruchamiania przez dwuklik na `index.html`, bo service worker, PWA i mikrofon działają poprawniej przez `localhost` albo `HTTPS`.
 
 ## 8. Uruchomienie na telefonie z Androidem
 
-### Wariant A — przez ten sam komputer w sieci Wi-Fi
+### Wariant A — test przez komputer w tej samej sieci Wi‑Fi
 
-1. Komputer i telefon muszą być w tej samej sieci Wi-Fi.
-2. Na komputerze sprawdź adres IP, np. `192.168.1.20`.
-3. Uruchom serwer:
+1. Komputer i telefon muszą być w tej samej sieci Wi‑Fi.
+2. Na komputerze uruchom serwer w folderze aplikacji:
 
 ```bash
-python -m http.server 8000
+python -m http.server 8000 --bind 0.0.0.0
+```
+
+3. Sprawdź adres IP komputera poleceniem:
+
+```bash
+ipconfig
 ```
 
 4. Na telefonie otwórz w Chrome:
@@ -182,11 +176,11 @@ Przykład:
 http://192.168.1.20:8000
 ```
 
-Uwaga: przez zwykły adres `http://192.168...` przeglądarka może ograniczać mikrofon i PWA. Do pełnego testu najlepiej opublikować projekt przez HTTPS.
+Uwaga: przez zwykły adres `http://192.168...` przeglądarka może ograniczać mikrofon i PWA. Do pełnego działania najlepiej użyć hostingu z `HTTPS`.
 
 ### Wariant B — hosting HTTPS
 
-Najwygodniej wrzucić katalog projektu na hosting HTTPS, np. GitHub Pages, Netlify, Cloudflare Pages albo własny serwer z certyfikatem HTTPS.
+Najwygodniej wrzucić katalog projektu na hosting HTTPS, np. GitHub Pages, Netlify albo Cloudflare Pages.
 
 Po wejściu na adres HTTPS w Chrome na Androidzie można dodać aplikację do ekranu głównego.
 
@@ -196,11 +190,19 @@ W Chrome na Androidzie:
 
 1. Otwórz adres aplikacji.
 2. Dotknij menu z trzema kropkami.
-3. Wybierz `Dodaj do ekranu głównego` albo `Zainstaluj aplikację`, zależnie od wersji Chrome i spełnienia warunków PWA.
+3. Wybierz `Dodaj do ekranu głównego` albo `Zainstaluj aplikację`.
 4. Potwierdź nazwę aplikacji.
 5. Uruchamiaj aplikację ikoną z ekranu głównego.
 
 ## 10. Format importu
+
+Obsługiwane kodowania pliku CSV:
+
+- `UTF-8`,
+- `Windows-1250`,
+- `ISO-8859-2`.
+
+To jest ważne, ponieważ Excel w polskiej wersji Windows często tworzy pliki CSV w kodowaniu systemowym, przez co bez poprawnej obsługi mogłyby pojawiać się błędne znaki zamiast `ą ć ę ł ń ó ś ź ż`.
 
 Obsługiwany format z nagłówkiem:
 
@@ -217,23 +219,40 @@ dzień dobry;good morning
 Chciałbym zamówić kawę.;I would like to order a coffee.
 ```
 
-## 11. Ograniczenia
+## 11. Funkcje lokalne i funkcje wymagające internetu
+
+Działają lokalnie w przeglądarce:
+
+- import CSV/tekstu z obsługą polskich znaków,
+- lista powtórek,
+- podgląd załadowanych par,
+- start od numeru,
+- zapis w `localStorage`,
+- eksport CSV,
+- trzy lokalne tryby oceny tekstu.
+
+Mogą wymagać internetu lub zależeć od przeglądarki/systemu:
+
+- rozpoznawanie mowy przez Web Speech API,
+- dostępność głosów syntezy mowy,
+- instalacja PWA i działanie service workera poza `localhost` — zwykle wymaga `HTTPS`.
+
+## 12. Ograniczenia
 
 1. Rozpoznawanie mowy w przeglądarce zależy od silnika przeglądarki, systemu Android, mikrofonu, internetu i uprawnień.
 2. Web Speech API w praktyce działa najlepiej w Chrome/Edge, a w niektórych przeglądarkach może być niedostępne.
-3. `SpeechRecognition` używa jednego języka rozpoznawania naraz. Dlatego ustawienie `pl-PL` jest lepsze do komend, a `en-US` może być lepsze do transkrypcji odpowiedzi angielskiej.
-4. Prosta ocena v3 nie jest pełną oceną fonetyczną wymowy. To porównanie rozpoznanego tekstu z poprawną odpowiedzią.
-5. Przeglądarka używa jednego języka rozpoznawania naraz, dlatego dodano automatyczne przełączanie `en-US` / `pl-PL`.
+3. `SpeechRecognition` używa jednego języka rozpoznawania naraz. Dlatego `pl-PL` jest lepsze do komend, a `en-US` jest lepsze do transkrypcji odpowiedzi angielskiej.
+4. Ocena odpowiedzi nie jest pełną fonetyczną oceną wymowy. Jest oparta na rozpoznanym tekście.
+5. Import CSV próbuje automatycznie rozpoznać kodowanie, ale przy bardzo nietypowym lub uszkodzonym pliku może być potrzebne zapisanie pliku jako `CSV UTF-8` w Excelu.
 6. Import XLSX nie został dodany, żeby projekt pozostał prosty i działał offline bez zewnętrznych bibliotek.
 7. `localStorage` jest lokalny dla danej przeglądarki i domeny. Dane nie synchronizują się między telefonem i komputerem.
 
-## 12. Możliwe dalsze rozszerzenia
+## 13. Możliwe dalsze rozszerzenia
 
 - Import XLSX przez bibliotekę SheetJS.
-- Profesjonalna ocena wymowy przez usługę typu Azure AI Speech Pronunciation Assessment.
+- Prawdziwa ocena wymowy przez Azure AI Speech lub inny silnik oceny wymowy.
+- Backend Node.js/Python ukrywający klucz API do modelu AI.
 - Tryb losowy.
 - Statystyki poprawności.
-- Fiszki z poziomami trudności.
 - Eksport i import całej bazy danych.
 - IndexedDB zamiast localStorage dla bardzo dużych list.
-- Oddzielny tryb „dyktuj odpowiedź po angielsku” i „słuchaj komend po polsku”.

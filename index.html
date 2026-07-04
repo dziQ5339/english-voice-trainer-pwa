@@ -17,7 +17,7 @@
   <header class="app-header">
     <div>
       <h1>Angielski Głosowo</h1>
-      <p>Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku.</p>
+      <p>Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki w imporcie CSV i komendach głosowych.</p>
     </div>
     <span id="installStatus" class="pill">PWA</span>
   </header>
@@ -26,12 +26,19 @@
     <section class="card learning-card" aria-labelledby="learningTitle">
       <div class="card-header">
         <h2 id="learningTitle">Nauka</h2>
-        <div class="mode-row">
-          <label for="studyMode">Tryb</label>
-          <select id="studyMode">
-            <option value="all">Pełna lista</option>
-            <option value="review">Lista powtórek</option>
-          </select>
+        <div class="header-controls">
+          <div class="mode-row">
+            <label for="studyMode">Tryb</label>
+            <select id="studyMode">
+              <option value="all">Pełna lista</option>
+              <option value="review">Lista powtórek</option>
+            </select>
+          </div>
+          <div class="start-number-row">
+            <label for="startNumberInput">Start od nr</label>
+            <input id="startNumberInput" type="number" inputmode="numeric" min="1" placeholder="np. 35" />
+            <button id="startNumberBtn" class="btn compact-btn">Start od numeru</button>
+          </div>
         </div>
       </div>
 
@@ -61,8 +68,11 @@
         <div class="evaluation-score" id="evaluationScore">—</div>
         <div id="evaluationComment" class="evaluation-comment">—</div>
         <div class="evaluation-details">
+          <div><strong>Tryb oceny:</strong> <span id="evaluationModeLabel">—</span></div>
           <div><strong>Brakuje:</strong> <span id="missingWords">—</span></div>
           <div><strong>Nadmiarowe / inne:</strong> <span id="extraWords">—</span></div>
+          <div><strong>Kolejność / szyk:</strong> <span id="orderInfo">—</span></div>
+          <div><strong>Sugestia:</strong> <span id="suggestionInfo">—</span></div>
         </div>
       </div>
 
@@ -83,13 +93,13 @@
 
       <details class="commands">
         <summary>Obsługiwane komendy głosowe</summary>
-        <p><strong>start</strong>, <strong>stop</strong>, <strong>sprawdź</strong>, <strong>następne</strong>, <strong>poprzednie</strong>, <strong>powtórz</strong>, <strong>dodaj do listy</strong>, <strong>pokaż listę powtórek</strong>. Przy języku rozpoznawania <strong>en-US</strong> działają też proste komendy angielskie: <strong>check</strong>, <strong>next</strong>, <strong>previous</strong>, <strong>repeat</strong>, <strong>start</strong>, <strong>stop</strong>.</p>
+        <p><strong>start</strong>, <strong>stop</strong>, <strong>sprawdź</strong>, <strong>następne</strong>, <strong>poprzednie</strong>, <strong>powtórz</strong>, <strong>dodaj do listy</strong>, <strong>pokaż listę powtórek</strong>. Komendy działają także wtedy, gdy przeglądarka rozpozna je bez polskich znaków, np. <strong>sprawdz</strong>, <strong>nastepne</strong>, <strong>powtorz</strong>. Przy języku rozpoznawania <strong>en-US</strong> działają też proste komendy angielskie: <strong>check</strong>, <strong>next</strong>, <strong>previous</strong>, <strong>repeat</strong>, <strong>start</strong>, <strong>stop</strong>.</p>
       </details>
     </section>
 
     <section class="card" aria-labelledby="importTitle">
       <h2 id="importTitle">Import danych</h2>
-      <p class="hint">Wklej dane rozdzielone średnikiem, tabulatorem albo przecinkiem. Nagłówek może być obecny.</p>
+      <p class="hint">Wklej dane rozdzielone średnikiem, tabulatorem albo przecinkiem. Nagłówek może być obecny. Import CSV obsługuje polskie znaki w kodowaniu UTF-8, Windows-1250 oraz ISO-8859-2.</p>
       <textarea id="importText" rows="8" spellcheck="false">Nr;Polski;English
 1;dzień dobry;good morning
 2;Chciałbym zamówić kawę.;I would like to order a coffee.
@@ -103,6 +113,27 @@
         <button id="clearDataBtn" class="btn btn-danger">Wyczyść dane</button>
       </div>
       <div id="importInfo" class="small-info">Brak zaimportowanych danych.</div>
+
+      <section class="loaded-preview" aria-labelledby="loadedPreviewTitle">
+        <div class="card-header compact-header">
+          <h3 id="loadedPreviewTitle">Podgląd załadowanych par</h3>
+          <span id="loadedPreviewCount" class="small-info">0 pozycji</span>
+        </div>
+        <div class="loaded-table-wrap">
+          <table class="loaded-table">
+            <thead>
+              <tr>
+                <th>Nr</th>
+                <th>Polski</th>
+                <th>English</th>
+              </tr>
+            </thead>
+            <tbody id="loadedPairsBody">
+              <tr><td colspan="3">Brak zaimportowanych danych.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <section class="card" aria-labelledby="settingsTitle">
@@ -110,9 +141,15 @@
 
       <div class="settings-grid">
         <label>
-          Szybkość odczytu
-          <input id="rateInput" type="range" min="0.5" max="1.6" step="0.1" value="1" />
-          <span id="rateValue">1.0</span>
+          Szybkość głosu PL
+          <input id="ratePlInput" type="range" min="0.5" max="1.6" step="0.1" value="1" />
+          <span id="ratePlValue">1.0</span>
+        </label>
+
+        <label>
+          Szybkość głosu EN
+          <input id="rateEnInput" type="range" min="0.5" max="1.6" step="0.1" value="1" />
+          <span id="rateEnValue">1.0</span>
         </label>
 
         <label>
@@ -139,9 +176,18 @@
           </select>
         </label>
 
+        <label>
+          Tryb oceny odpowiedzi po angielsku
+          <select id="evaluationMode">
+            <option value="simple">Ocena prosta</option>
+            <option value="medium">Ocena średnia</option>
+            <option value="advanced">Ocena zaawansowana lokalna</option>
+          </select>
+        </label>
+
         <label class="checkbox-label">
-          <input id="evaluateAnswer" type="checkbox" />
-          Oceniaj rozpoznaną odpowiedź po angielsku
+          <input id="autoMic" type="checkbox" />
+          Utrzymuj mikrofon włączony podczas nauki
         </label>
 
         <label class="checkbox-label">
