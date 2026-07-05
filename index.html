@@ -14,19 +14,19 @@
 <body>
   <noscript>Ta aplikacja wymaga włączonego JavaScript.</noscript>
 
-  <header class="app-header">
-    <div>
+  <header class="app-header compact-app-header">
+    <div class="brand-line">
       <h1>Angielski Głosowo</h1>
-      <p>Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki, proste komendy głosowe oraz opcję niewygaszania ekranu podczas nauki.</p>
+      <button class="info-button" type="button" aria-label="Informacja o aplikacji" title="Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki, krótkie komendy głosowe, listę powtórek, zapamiętywanie ostatniej pozycji i opcję niewygaszania ekranu.">i</button>
     </div>
     <span id="installStatus" class="pill">PWA</span>
   </header>
 
   <main class="layout">
     <section class="card learning-card" aria-labelledby="learningTitle">
-      <div class="card-header">
+      <div class="card-header learning-header">
         <h2 id="learningTitle">Nauka</h2>
-        <div class="header-controls">
+        <div class="header-controls compact-learning-controls">
           <div class="mode-row">
             <label for="studyMode">Tryb</label>
             <select id="studyMode">
@@ -37,31 +37,40 @@
           <div class="start-number-row">
             <label for="startNumberInput">Start od nr</label>
             <input id="startNumberInput" type="number" inputmode="numeric" min="1" placeholder="np. 35" />
-            <button id="startNumberBtn" class="btn compact-btn">Start od numeru</button>
+            <button id="startNumberBtn" class="btn compact-btn">Start</button>
           </div>
         </div>
       </div>
 
-      <div class="progress-wrap">
+      <div class="progress-wrap compact-progress">
         <div id="progressText" class="progress-text">Para 0 z 0</div>
         <div class="progress-bar" aria-hidden="true"><span id="progressBar"></span></div>
       </div>
 
-      <div class="pair-box">
+      <div class="pair-box priority-box">
         <div class="pair-number" id="pairNumber">Nr —</div>
-        <div class="label">Polski</div>
+        <div class="label">Tekst po polsku</div>
         <div id="polishText" class="main-text">Zaimportuj listę i naciśnij Start.</div>
       </div>
 
-      <div class="answer-box">
+      <div class="answer-box priority-box">
         <div class="label">Rozpoznana odpowiedź użytkownika</div>
         <div id="recognizedText" class="recognized-text">—</div>
       </div>
 
-      <div class="answer-box correct-answer" id="correctAnswerBox" hidden>
+      <div class="answer-box correct-answer priority-box" id="correctAnswerBox" hidden>
         <div class="label">Poprawne tłumaczenie po angielsku</div>
         <div id="englishText" class="main-text english">—</div>
       </div>
+
+      <div class="quick-actions" aria-label="Główne sterowanie">
+        <button id="checkBtn" class="btn btn-primary">Sprawdź<br><span>test</span></button>
+        <button id="nextBtn" class="btn">Następne<br><span>dalej</span></button>
+        <button id="addReviewBtn" class="btn">Dodaj<br><span>dodaj</span></button>
+        <button id="micBtn" class="btn">Mikrofon</button>
+      </div>
+
+      <div id="status" class="status" role="status">Gotowe.</div>
 
       <div class="answer-box evaluation-box" id="evaluationBox" hidden>
         <div class="label">Ocena odpowiedzi</div>
@@ -76,25 +85,21 @@
         </div>
       </div>
 
-      <div id="status" class="status" role="status">Gotowe.</div>
-
-      <div class="button-grid primary-buttons">
-        <button id="startBtn" class="btn btn-primary">Start</button>
-        <button id="captureAnswerBtn" class="btn">Odpowiedź EN</button>
-        <button id="checkBtn" class="btn">Sprawdź</button>
-        <button id="clearAnswerBtn" class="btn">Wyczyść odpowiedź</button>
-        <button id="nextBtn" class="btn">Następne</button>
-        <button id="prevBtn" class="btn">Poprzednie</button>
-        <button id="repeatBtn" class="btn">Powtórz</button>
-        <button id="addReviewBtn" class="btn">Dodaj do listy powtórek</button>
-        <button id="showReviewBtn" class="btn">Lista powtórek</button>
-        <button id="stopBtn" class="btn btn-danger">Stop</button>
-      </div>
-
-      <details class="commands">
-        <summary>Obsługiwane komendy głosowe</summary>
-        <p>Główne, najprostsze komendy: <strong>test</strong> = sprawdź, <strong>dalej</strong> = następne, <strong>cofnij</strong> = poprzednie, <strong>jeszcze</strong> = powtórz, <strong>dodaj</strong> = dodaj do powtórek, <strong>lista</strong> = pokaż powtórki, <strong>mówię</strong> = odpowiedź po angielsku, <strong>kasuj</strong> = wyczyść odpowiedź, <strong>start</strong>, <strong>stop</strong>.</p>
-        <p>Działają też starsze komendy: <strong>sprawdź</strong>, <strong>następne</strong>, <strong>poprzednie</strong>, <strong>powtórz</strong>, <strong>dodaj do listy</strong>, <strong>pokaż listę powtórek</strong>. Komendy mogą być rozpoznane bez polskich znaków, np. <strong>sprawdz</strong>, <strong>powtorz</strong>.</p>
+      <details class="secondary-actions-panel">
+        <summary>Dodatkowe przyciski i komendy</summary>
+        <div class="button-grid secondary-buttons">
+          <button id="startBtn" class="btn btn-primary">Start</button>
+          <button id="captureAnswerBtn" class="btn">Odpowiedź EN</button>
+          <button id="clearAnswerBtn" class="btn">Wyczyść odpowiedź</button>
+          <button id="prevBtn" class="btn">Poprzednie</button>
+          <button id="repeatBtn" class="btn">Powtórz</button>
+          <button id="showReviewBtn" class="btn">Lista powtórek</button>
+          <button id="stopBtn" class="btn btn-danger">Stop</button>
+        </div>
+        <div class="commands-text">
+          <p><strong>Proste komendy:</strong> test, dalej, cofnij, jeszcze, dodaj, lista, mówię, kasuj, start, stop.</p>
+          <p>Działają też starsze komendy: sprawdź, następne, poprzednie, powtórz, dodaj do listy, pokaż listę powtórek. Komendy mogą być rozpoznane bez polskich znaków, np. sprawdz, powtorz.</p>
+        </div>
       </details>
     </section>
 
@@ -111,15 +116,12 @@
           Import CSV
           <input id="csvFile" type="file" accept=".csv,text/csv" />
         </label>
-        <button id="clearDataBtn" class="btn btn-danger">Wyczyść dane</button>
+        <button id="clearDataBtn" class="btn btn-danger">Wyczyść załadowaną listę</button>
       </div>
       <div id="importInfo" class="small-info">Brak zaimportowanych danych.</div>
 
-      <section class="loaded-preview" aria-labelledby="loadedPreviewTitle">
-        <div class="card-header compact-header">
-          <h3 id="loadedPreviewTitle">Podgląd załadowanych par</h3>
-          <span id="loadedPreviewCount" class="small-info">0 pozycji</span>
-        </div>
+      <details class="loaded-preview" open>
+        <summary class="section-summary"><span>Podgląd załadowanych par</span><span id="loadedPreviewCount" class="small-info">0 pozycji</span></summary>
         <div class="loaded-table-wrap">
           <table class="loaded-table">
             <thead>
@@ -134,7 +136,7 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
     </section>
 
     <section class="card" aria-labelledby="settingsTitle">
@@ -204,24 +206,21 @@
       </div>
 
       <div class="button-row">
-        <button id="micBtn" class="btn">Włącz mikrofon</button>
         <button id="testPlBtn" class="btn">Test PL</button>
         <button id="testEnBtn" class="btn">Test EN</button>
       </div>
       <div id="speechInfo" class="small-info">Rozpoznawanie mowy zostanie sprawdzone po uruchomieniu.</div>
     </section>
 
-    <section class="card full-width" aria-labelledby="reviewTitle">
-      <div class="card-header">
-        <h2 id="reviewTitle">Lista powtórek</h2>
-        <div class="button-row compact">
-          <button id="studyReviewBtn" class="btn">Ucz się z powtórek</button>
-          <button id="exportReviewBtn" class="btn">Eksport CSV</button>
-          <button id="clearReviewBtn" class="btn btn-danger">Wyczyść listę</button>
-        </div>
+    <details id="reviewPanel" class="card full-width review-details">
+      <summary class="section-summary"><span id="reviewTitle">Lista powtórek</span><span id="reviewCount" class="small-info">0 pozycji</span></summary>
+      <div class="button-row compact">
+        <button id="studyReviewBtn" class="btn">Ucz się z powtórek</button>
+        <button id="exportReviewBtn" class="btn">Eksport CSV</button>
+        <button id="clearReviewBtn" class="btn btn-danger">Wyczyść listę</button>
       </div>
       <div id="reviewList" class="review-list">Lista powtórek jest pusta.</div>
-    </section>
+    </details>
   </main>
 
   <script src="app.js" defer></script>

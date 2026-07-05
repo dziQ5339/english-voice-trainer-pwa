@@ -1,146 +1,90 @@
-# Angielski Głosowo — prosta aplikacja PWA — v6
+# Angielski Głosowo PWA — wersja v7
 
-Aplikacja do głosowej nauki angielskich słówek i zdań z własnej listy par: tekst po polsku oraz odpowiadający mu tekst po angielsku.
+Prosta aplikacja PWA do głosowej nauki angielskich słówek i zdań z własnej listy.
 
-## 1. Co zmieniono w wersji v6
+## Najważniejsze zmiany w v7
 
-Wersja v6 rozbudowuje wersję v5 o trzy główne zmiany:
+1. Zmniejszono górną belkę. Opis aplikacji jest dostępny jako dymek po najechaniu/kliknięciu ikony `i`.
+2. Przebudowano ekran nauki pod telefon: najpierw widać tekst polski, rozpoznaną odpowiedź, poprawne tłumaczenie i cztery główne przyciski.
+3. Główne przyciski są w zwartej linii: `Sprawdź / test`, `Następne / dalej`, `Dodaj / dodaj`, `Mikrofon`.
+4. Lista powtórek jest sekcją rozwijaną.
+5. Program odczytuje numer pary przed tekstem po polsku, np. `15. Chciałbym zamówić kawę.`
+6. Program zapisuje ostatnią pozycję w `localStorage` i po ponownym otwarciu próbuje wrócić do ostatniego miejsca.
+7. Lista powtórek jest niezależna od aktualnie załadowanej listy i nie znika po imporcie innego CSV.
+8. Mikrofon nie jest już zatrzymywany na czas każdego odczytu syntezatorem mowy. Aplikacja ignoruje wyniki rozpoznania w czasie mówienia programu, co ogranicza częste przełączanie mikrofonu.
+9. Ponawianie nasłuchu po zakończeniu sesji rozpoznawania odbywa się z krótkim opóźnieniem, bez agresywnego zapętlania.
 
-1. **Nie wygaszaj ekranu podczas nauki**
-   - dodano opcję `Nie wygaszaj ekranu podczas nauki`,
-   - po kliknięciu `Start` aplikacja próbuje zablokować wygaszanie ekranu przez `Screen Wake Lock API`,
-   - po kliknięciu `Stop` blokada ekranu jest zwalniana,
-   - po powrocie do aplikacji program próbuje ponownie utrzymać ekran aktywny,
-   - funkcja działa tylko wtedy, gdy pozwala na to przeglądarka, system Android i bezpieczny kontekst strony, najlepiej `HTTPS`.
+## Komendy głosowe
 
-2. **Nowy tryb oceny: BRAK**
-   - w ustawieniu `Tryb oceny odpowiedzi po angielsku` dodano opcję `BRAK — nie oceniaj wypowiedzi`,
-   - po wybraniu tej opcji program pokazuje i odczytuje poprawną odpowiedź po angielsku, ale nie liczy procentów, nie pokazuje brakujących słów i nie wypowiada komentarza oceniającego.
+Zalecane krótkie komendy:
 
-3. **Prostsze komendy głosowe**
-   - dodano krótkie komendy zaprojektowane tak, aby były łatwiejsze do wymówienia i rozpoznania przez przeglądarkę,
-   - stare komendy nadal działają.
+- `test` — sprawdź odpowiedź,
+- `dalej` — następna para,
+- `cofnij` — poprzednia para,
+- `jeszcze` — powtórz,
+- `dodaj` — dodaj aktualną pozycję do powtórek,
+- `lista` — pokaż listę powtórek,
+- `mówię` — przełącz na odpowiedź po angielsku,
+- `kasuj` — wyczyść rozpoznaną odpowiedź,
+- `start` — rozpocznij,
+- `stop` — zatrzymaj.
 
-## 2. Zalecane komendy głosowe w v6
+Działają również starsze komendy: `sprawdź`, `następne`, `poprzednie`, `powtórz`, `dodaj do listy`, `pokaż listę powtórek`.
 
-| Cel | Zalecana komenda | Starsza komenda, która nadal działa |
-|---|---|---|
-| Sprawdź odpowiedź | `test` | `sprawdź`, `sprawdz` |
-| Następna para | `dalej` | `następne`, `nastepne` |
-| Poprzednia para | `cofnij` | `poprzednie`, `wstecz` |
-| Powtórz aktualny tekst | `jeszcze` | `powtórz`, `powtorz` |
-| Dodaj do listy powtórek | `dodaj` | `dodaj do listy` |
-| Pokaż listę powtórek | `lista` | `pokaż listę powtórek` |
-| Tryb mówienia odpowiedzi EN | `mówię` | `odpowiedź`, `angielski` |
-| Wyczyść rozpoznaną odpowiedź | `kasuj` | `wyczyść` |
-| Rozpocznij | `start` | `rozpocznij` |
-| Zatrzymaj | `stop` | `zatrzymaj` |
+## Format danych
 
-Przyjęta zasada: komendy powinny być krótkie, jednoznaczne i możliwie bez polskich znaków. Dlatego np. `dalej` jest praktyczniejsze niż `następne`, a `test` jest praktyczniejsze niż `sprawdź`.
-
-## 3. Funkcje zachowane z wersji v5
-
-- import tekstu i CSV,
-- obsługa polskich znaków w imporcie CSV: `UTF-8`, `Windows-1250`, `ISO-8859-2`,
-- przewijany podgląd załadowanych par,
-- start nauki od dowolnego numeru pary,
-- lista powtórek,
-- nauka z listy powtórek,
-- eksport listy powtórek do CSV,
-- osobna szybkość głosu PL i EN,
-- automatyczne utrzymywanie mikrofonu podczas nauki,
-- automatyczne przełączanie języka rozpoznawania: odpowiedź EN → komendy PL,
-- tryby oceny: `BRAK`, `prosta`, `średnia`, `zaawansowana lokalna`.
-
-## 4. Architektura aplikacji
-
-Aplikacja jest prostą aplikacją webową PWA bez backendu.
-
-Pliki:
-
-```text
-english-voice-trainer-pwa-v6/
-├── index.html
-├── styles.css
-├── app.js
-├── manifest.webmanifest
-├── sw.js
-├── sample.csv
-├── README.md
-└── icons/
-    ├── icon-192.png
-    └── icon-512.png
-```
-
-Warstwy:
-
-1. `index.html` — struktura interfejsu.
-2. `styles.css` — responsywny wygląd dla komputera i telefonu.
-3. `app.js` — cała logika aplikacji.
-4. `manifest.webmanifest` — konfiguracja PWA.
-5. `sw.js` — service worker i cache plików.
-6. `sample.csv` — przykładowe dane.
-
-## 5. Uruchomienie na komputerze
-
-W folderze aplikacji uruchom:
-
-```bash
-python -m http.server 8000
-```
-
-Następnie otwórz w przeglądarce:
-
-```text
-http://localhost:8000
-```
-
-Nie uruchamiaj aplikacji przez dwuklik na `index.html`, bo mikrofon, service worker i PWA działają poprawniej przez `localhost` albo `HTTPS`.
-
-## 6. Uruchomienie na Androidzie
-
-Najlepsza metoda to GitHub Pages, Netlify albo inny hosting z `HTTPS`.
-
-Po wgraniu plików na GitHub Pages otwórz adres aplikacji w Chrome na Androidzie, np.:
-
-```text
-https://twoj-login.github.io/nazwa-repozytorium/
-```
-
-Następnie:
-
-1. Zezwól na mikrofon.
-2. Otwórz menu Chrome z trzema kropkami.
-3. Wybierz `Dodaj do ekranu głównego` albo `Zainstaluj aplikację`.
-4. Uruchamiaj aplikację z ikony na ekranie telefonu.
-
-## 7. Ważne ograniczenia
-
-1. **Nie wygaszaj ekranu** działa tylko wtedy, gdy przeglądarka obsługuje `Screen Wake Lock API`. Na Androidzie najlepiej testować w Chrome i przez `HTTPS`.
-2. System Android lub Chrome mogą zwolnić blokadę ekranu, np. przy niskim poziomie baterii, przełączeniu aplikacji albo zablokowaniu telefonu.
-3. Rozpoznawanie mowy zależy od przeglądarki, mikrofonu, internetu, uprawnień i hałasu w otoczeniu.
-4. Tryb `Ocena zaawansowana lokalna` nie jest profesjonalną analizą fonetyczną wymowy. Program ocenia tekst rozpoznany przez przeglądarkę, a nie dokładną artykulację głosek, akcent i intonację.
-5. Dane są zapisywane lokalnie w `localStorage`, osobno dla danej przeglądarki i adresu strony.
-
-## 8. Format importu
-
-Przykład:
+CSV albo tekst wklejany do aplikacji:
 
 ```csv
 Nr;Polski;English
 1;dzień dobry;good morning
 2;Chciałbym zamówić kawę.;I would like to order a coffee.
-3;Gdzie jest najbliższy przystanek?;Where is the nearest bus stop?
 ```
 
-Obsługiwane separatory:
+Import CSV obsługuje UTF-8, Windows-1250 i ISO-8859-2.
 
-- średnik,
-- tabulator,
-- przecinek.
+## Uruchomienie lokalne na komputerze
 
-Obsługiwane kodowania pliku CSV:
+W folderze z plikiem `index.html` uruchom:
 
-- `UTF-8`,
-- `Windows-1250`,
-- `ISO-8859-2`.
+```bash
+python -m http.server 8000
+```
+
+Następnie otwórz:
+
+```text
+http://localhost:8000
+```
+
+## Aktualizacja na GitHub Pages
+
+1. Rozpakuj paczkę `english-voice-trainer-pwa-v7.zip`.
+2. Wgraj zawartość folderu do głównego katalogu repozytorium GitHub.
+3. Upewnij się, że `index.html` jest w głównym katalogu repozytorium.
+4. Kliknij `Commit changes`.
+5. Wejdź w `Actions` i sprawdź, czy publikacja GitHub Pages zakończyła się zielonym znakiem.
+6. Na telefonie odśwież aplikację. Jeżeli nadal widać starą wersję, wyczyść dane strony/PWA w Chrome.
+
+## Test mikrofonu
+
+1. Otwórz aplikację przez HTTPS, np. GitHub Pages.
+2. Kliknij `Start` lub `Mikrofon`.
+3. Zezwól na mikrofon w Chrome.
+4. Powiedz odpowiedź po angielsku.
+5. Po zapisaniu odpowiedzi powiedz `test`.
+
+## Test zapamiętywania pozycji
+
+1. Zaimportuj listę.
+2. Przejdź np. do pozycji 5.
+3. Zamknij kartę albo aplikację PWA.
+4. Otwórz aplikację ponownie.
+5. Aplikacja powinna przywrócić ostatnio zapisaną pozycję, jeżeli lista nadal jest dostępna lokalnie.
+
+## Ograniczenia
+
+- Web Speech API działa najlepiej w Chrome na Androidzie i zwykle wymaga internetu.
+- Przeglądarka może zakończyć sesję rozpoznawania mowy mimo ustawienia `continuous = true`.
+- Strona powinna działać przez HTTPS, aby mikrofon, PWA i blokada wygaszania ekranu działały możliwie poprawnie.
+- Ocena odpowiedzi opiera się na tekście rozpoznanym przez przeglądarkę, a nie na profesjonalnej analizie fonetycznej.

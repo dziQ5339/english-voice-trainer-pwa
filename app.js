@@ -3,8 +3,10 @@
 
   const STORAGE_KEYS = {
     pairs: 'evt_pairs_v1',
-    review: 'evt_review_numbers_v1',
-    settings: 'evt_settings_v1'
+    review: 'evt_review_items_v2',
+    legacyReview: 'evt_review_numbers_v1',
+    settings: 'evt_settings_v1',
+    progress: 'evt_progress_v1'
   };
 
   const DEFAULT_SETTINGS = {
@@ -22,7 +24,7 @@
 
   const state = {
     pairs: [],
-    reviewNumbers: [],
+    reviewItems: [],
     mode: 'all',
     currentIndex: 0,
     revealed: false,
@@ -36,6 +38,9 @@
     wakeLockSupported: false,
     restartRecognitionAfterSpeech: false,
     changingRecognitionLanguage: false,
+    recognitionRestartTimer: null,
+    speaking: false,
+    ignoreSpeechUntil: 0,
     deferredInstallPrompt: null,
     settings: { ...DEFAULT_SETTINGS }
   };
@@ -96,6 +101,8 @@
     testEnBtn: document.getElementById('testEnBtn'),
     speechInfo: document.getElementById('speechInfo'),
     reviewList: document.getElementById('reviewList'),
+    reviewCount: document.getElementById('reviewCount'),
+    reviewPanel: document.getElementById('reviewPanel'),
     studyReviewBtn: document.getElementById('studyReviewBtn'),
     exportReviewBtn: document.getElementById('exportReviewBtn'),
     clearReviewBtn: document.getElementById('clearReviewBtn')
@@ -133,12 +140,14 @@
       el.studyMode.value = 'review';
       state.mode = 'review';
       state.currentIndex = 0;
+      saveProgress();
       startStudy();
     });
 
     el.studyMode.addEventListener('change', () => {
       state.mode = el.studyMode.value;
       state.currentIndex = 0;
+      saveProgress();
       state.revealed = false;
       resetCurrentAnswer();
       renderLearning();
@@ -223,22 +232,54 @@
     try {
       const storedPairs = JSON.parse(localStorage.getItem(STORAGE_KEYS.pairs) || '[]');
       const storedReview = JSON.parse(localStorage.getItem(STORAGE_KEYS.review) || '[]');
+      const legacyReview = JSON.parse(localStorage.getItem(STORAGE_KEYS.legacyReview) || '[]');
       const storedSettings = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || '{}');
+      const storedProgress = JSON.parse(localStorage.getItem(STORAGE_KEYS.progress) || '{}');
 
       state.pairs = Array.isArray(storedPairs) ? storedPairs.filter(isValidPair) : [];
-      state.reviewNumbers = Array.isArray(storedReview) ? storedReview : [];
+      state.reviewItems = normalizeStoredReview(storedReview, legacyReview);
       state.settings = { ...DEFAULT_SETTINGS, ...storedSettings };
       if (storedSettings.rate && !storedSettings.ratePl) state.settings.ratePl = Number(storedSettings.rate) || DEFAULT_SETTINGS.ratePl;
       if (storedSettings.rate && !storedSettings.rateEn) state.settings.rateEn = Number(storedSettings.rate) || DEFAULT_SETTINGS.rateEn;
       if (typeof storedSettings.evaluateAnswer === 'boolean' && !storedSettings.evaluationMode) {
         state.settings.evaluationMode = storedSettings.evaluateAnswer ? 'simple' : 'simple';
       }
+      restoreProgress(storedProgress);
+      saveReview();
     } catch (err) {
       console.error(err);
       state.pairs = [];
-      state.reviewNumbers = [];
+      state.reviewItems = [];
       state.settings = { ...DEFAULT_SETTINGS };
     }
+  }
+
+  function normalizeStoredReview(storedReview, legacyReview) {
+    if (Array.isArray(storedReview) && storedReview.some((item) => item && typeof item === 'object' && item.pl && item.en)) {
+      return uniquePairs(storedReview.filter(isValidPair));
+    }
+
+    const numbers = Array.isArray(storedReview) && storedReview.length ? storedReview : legacyReview;
+    if (Array.isArray(numbers) && numbers.length && state.pairs.length) {
+      const wanted = new Set(numbers.map(String));
+      return uniquePairs(state.pairs.filter((pair) => wanted.has(String(pair.nr))));
+    }
+
+    return [];
+  }
+
+  function restoreProgress(progress) {
+    if (!progress) return;
+    if (progress.mode === 'review' || progress.mode === 'all') {
+      state.mode = progress.mode;
+    }
+    const list = state.mode === 'review' ? state.reviewItems : state.pairs;
+    if (!list.length) return;
+    const indexByKey = list.findIndex((pair) => pairIdentity(pair) === progress.pairKey);
+    const indexByNumber = list.findIndex((pair) => String(pair.nr) === String(progress.nr));
+    const indexByStoredIndex = Number.isInteger(progress.currentIndex) ? progress.currentIndex : -1;
+    const index = indexByKey >= 0 ? indexByKey : indexByNumber >= 0 ? indexByNumber : indexByStoredIndex;
+    if (index >= 0 && index < list.length) state.currentIndex = index;
   }
 
   function savePairs() {
@@ -246,7 +287,19 @@
   }
 
   function saveReview() {
-    localStorage.setItem(STORAGE_KEYS.review, JSON.stringify(state.reviewNumbers));
+    localStorage.setItem(STORAGE_KEYS.review, JSON.stringify(uniquePairs(state.reviewItems)));
+  }
+
+  function saveProgress() {
+    const pair = getCurrentPair();
+    const progress = {
+      mode: state.mode,
+      currentIndex: state.currentIndex,
+      nr: pair ? pair.nr : null,
+      pairKey: pair ? pairIdentity(pair) : null,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(progress));
   }
 
   function saveSettings() {
@@ -260,6 +313,7 @@
     el.rateEnValue.textContent = Number(state.settings.rateEn).toFixed(1);
     el.volumeInput.value = String(state.settings.volume);
     el.volumeValue.textContent = Number(state.settings.volume).toFixed(1);
+    el.studyMode.value = state.mode;
     el.recognitionLang.value = state.settings.recognitionLang;
     if (!['none', 'simple', 'medium', 'advanced'].includes(state.settings.evaluationMode)) state.settings.evaluationMode = 'simple';
     el.evaluationMode.value = state.settings.evaluationMode || 'simple';
@@ -354,7 +408,7 @@
 
     recognition.onstart = () => {
       state.listening = true;
-      el.micBtn.textContent = 'Wyłącz mikrofon';
+      el.micBtn.textContent = 'Mikrofon ON';
       el.speechInfo.textContent = `Mikrofon aktywny. Język: ${recognition.lang}.`;
     };
 
@@ -368,7 +422,7 @@
 
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         state.listening = false;
-        el.micBtn.textContent = 'Włącz mikrofon';
+        el.micBtn.textContent = 'Mikrofon';
         setStatus('Przeglądarka nie pozwoliła użyć mikrofonu. Kliknij ikonę przy adresie strony i ustaw Mikrofon → Zezwalaj. Potem użyj przycisku „Włącz mikrofon”.', 'warning');
         return;
       }
@@ -380,23 +434,23 @@
       }
 
       state.listening = false;
-      el.micBtn.textContent = 'Włącz mikrofon';
+      el.micBtn.textContent = 'Mikrofon';
       setStatus(`Błąd rozpoznawania mowy: ${event.error}. Sprawdź uprawnienia mikrofonu albo używaj przycisków.`, 'warning');
     };
 
     recognition.onend = () => {
       if (state.changingRecognitionLanguage) {
         state.changingRecognitionLanguage = false;
-        if (state.listening) safeStartRecognition();
+        if (state.listening) scheduleRecognitionRestart(300);
         return;
       }
 
       const shouldRestart = state.listening && !state.restartRecognitionAfterSpeech;
       if (shouldRestart) {
-        safeStartRecognition();
+        scheduleRecognitionRestart(650);
       } else if (!state.restartRecognitionAfterSpeech) {
         state.listening = false;
-        el.micBtn.textContent = 'Włącz mikrofon';
+        el.micBtn.textContent = 'Mikrofon';
       }
     };
 
@@ -404,19 +458,40 @@
     state.recognition = recognition;
   }
 
+  function scheduleRecognitionRestart(delayMs = 650) {
+    if (!state.recognition || !state.listening) return;
+    if (state.recognitionRestartTimer) clearTimeout(state.recognitionRestartTimer);
+    state.recognitionRestartTimer = window.setTimeout(() => {
+      state.recognitionRestartTimer = null;
+      if (state.listening) safeStartRecognition();
+    }, delayMs);
+  }
+
   function safeStartRecognition() {
     if (!state.recognition) return;
+    if (state.recognitionRestartTimer) {
+      clearTimeout(state.recognitionRestartTimer);
+      state.recognitionRestartTimer = null;
+    }
     try {
       state.recognition.lang = state.settings.recognitionLang;
       state.recognition.start();
     } catch (err) {
       // Chrome rzuca błąd, jeżeli start() zostanie wywołany, gdy mikrofon już działa.
+      // Drugi typowy przypadek to brak aktywnej zgody użytkownika na mikrofon.
+      if (err && err.name && err.name !== 'InvalidStateError') {
+        setStatus('Nie udało się automatycznie uruchomić mikrofonu. Kliknij przycisk „Mikrofon”.', 'warning');
+      }
     }
   }
 
   function safeStopRecognition(temporary = false) {
     if (!state.recognition) return;
     state.restartRecognitionAfterSpeech = temporary;
+    if (state.recognitionRestartTimer) {
+      clearTimeout(state.recognitionRestartTimer);
+      state.recognitionRestartTimer = null;
+    }
     try {
       state.recognition.stop();
     } catch (err) {
@@ -488,7 +563,7 @@
     if (state.listening) {
       state.listening = false;
       safeStopRecognition(false);
-      el.micBtn.textContent = 'Włącz mikrofon';
+      el.micBtn.textContent = 'Mikrofon';
       el.speechInfo.textContent = 'Mikrofon wyłączony.';
     } else {
       state.listening = true;
@@ -509,8 +584,14 @@
     const text = (finalText || interimText).trim();
     if (!text) return;
 
+    if (state.speaking || Date.now() < state.ignoreSpeechUntil) {
+      return;
+    }
+
     const command = detectCommand(text);
-    if (command && finalText) {
+    const commandLanguage = String(state.settings.recognitionLang || '').toLowerCase().startsWith('pl');
+    const commandAllowed = commandLanguage || ['start', 'stop', 'captureAnswer', 'clearAnswer'].includes(command);
+    if (command && finalText && commandAllowed) {
       runCommand(command);
       return;
     }
@@ -660,23 +741,23 @@
     const queue = items.filter((item) => item && item.text);
     if (!queue.length) return;
 
-    const wasListening = state.listening;
-    if (wasListening) safeStopRecognition(true);
-
     window.speechSynthesis.cancel();
+    state.speaking = true;
+    state.ignoreSpeechUntil = Date.now() + 800;
     let index = 0;
 
-    const resumeRecognition = () => {
-      state.restartRecognitionAfterSpeech = false;
-      if (wasListening) {
+    const finishSpeaking = () => {
+      state.speaking = false;
+      state.ignoreSpeechUntil = Date.now() + 900;
+      if (state.running && state.settings.autoMic && state.recognition && !state.listening) {
         state.listening = true;
-        safeStartRecognition();
+        scheduleRecognitionRestart(250);
       }
     };
 
     const speakNext = () => {
       if (index >= queue.length) {
-        resumeRecognition();
+        finishSpeaking();
         return;
       }
 
@@ -699,10 +780,14 @@
     speakNext();
   }
 
+  function speakPolishPrompt(pair) {
+    if (!pair) return;
+    speak(`${pair.nr}. ${pair.pl}`, 'pl-PL');
+  }
+
   function getActiveList() {
     if (state.mode === 'review') {
-      const reviewSet = new Set(state.reviewNumbers.map(String));
-      return state.pairs.filter((pair) => reviewSet.has(String(pair.nr)));
+      return state.reviewItems;
     }
     return state.pairs;
   }
@@ -753,10 +838,11 @@
     requestWakeLock();
     renderLearning();
     renderLoadedPairs();
+    saveProgress();
 
     const pair = getCurrentPair();
     setStatus(`Start od numeru ${pair.nr}. Podaj odpowiedź po angielsku, a potem powiedz „test”.`);
-    if (readPolish) speak(pair.pl, 'pl-PL');
+    if (pair) speakPolishPrompt(pair);
   }
 
   function jumpToPairFromPreview(nr) {
@@ -785,8 +871,9 @@
     ensureListeningDuringStudy();
     requestWakeLock();
     renderLoadedPairs();
+    saveProgress();
     setStatus('Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „test” albo kliknij Sprawdź. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
-    speak(pair.pl, 'pl-PL');
+    speakPolishPrompt(pair);
   }
 
   function stopStudy() {
@@ -795,7 +882,8 @@
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     safeStopRecognition(false);
     releaseWakeLock();
-    el.micBtn.textContent = 'Włącz mikrofon';
+    el.micBtn.textContent = 'Mikrofon';
+    saveProgress();
     setStatus('Zatrzymano naukę.');
   }
 
@@ -835,11 +923,12 @@
     resetCurrentAnswer();
     renderLearning();
     renderLoadedPairs();
+    saveProgress();
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
     setStatus('Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
-    speak(pair.pl, 'pl-PL');
+    speakPolishPrompt(pair);
   }
 
   function prevPair() {
@@ -857,11 +946,12 @@
     resetCurrentAnswer();
     renderLearning();
     renderLoadedPairs();
+    saveProgress();
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
     setStatus('Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
-    speak(pair.pl, 'pl-PL');
+    speakPolishPrompt(pair);
   }
 
   function repeatCurrent() {
@@ -875,7 +965,7 @@
       speak(pair.en, 'en-US');
     } else {
       setStatus('Powtarzam tekst polski.');
-      speak(pair.pl, 'pl-PL');
+      speakPolishPrompt(pair);
     }
   }
 
@@ -885,12 +975,13 @@
       setStatus('Brak aktualnej pary do dodania.', 'warning');
       return;
     }
-    const nr = String(pair.nr);
-    if (!state.reviewNumbers.map(String).includes(nr)) {
-      state.reviewNumbers.push(pair.nr);
+    const key = pairIdentity(pair);
+    if (!state.reviewItems.some((item) => pairIdentity(item) === key)) {
+      state.reviewItems.push({ nr: String(pair.nr), pl: pair.pl, en: pair.en });
+      state.reviewItems = uniquePairs(state.reviewItems);
       saveReview();
       renderReviewList();
-      setStatus(`Dodano do listy powtórek. Liczba pozycji: ${state.reviewNumbers.length}.`);
+      setStatus(`Dodano do listy powtórek. Liczba pozycji: ${state.reviewItems.length}.`);
     } else {
       setStatus('Ta para jest już na liście powtórek.', 'warning');
     }
@@ -898,6 +989,7 @@
 
   function scrollToReview() {
     renderReviewList();
+    if (el.reviewPanel) el.reviewPanel.open = true;
     document.getElementById('reviewTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -925,12 +1017,12 @@
     }
 
     state.pairs = result.pairs;
-    state.reviewNumbers = state.reviewNumbers.filter((nr) => state.pairs.some((pair) => String(pair.nr) === String(nr)));
+    const storedProgress = JSON.parse(localStorage.getItem(STORAGE_KEYS.progress) || '{}');
     state.currentIndex = 0;
+    restoreProgress(storedProgress);
     state.revealed = false;
     resetCurrentAnswer();
     savePairs();
-    saveReview();
     renderAll();
 
     const errorInfo = result.errors.length ? ` Pominięto ${result.errors.length} błędnych wierszy.` : '';
@@ -1099,35 +1191,34 @@
   }
 
   function clearData() {
-    if (!confirm('Czy na pewno wyczyścić całą zaimportowaną listę i listę powtórek?')) return;
+    if (!confirm('Czy na pewno wyczyścić zaimportowaną listę? Lista powtórek zostanie zachowana.')) return;
     state.pairs = [];
-    state.reviewNumbers = [];
     state.currentIndex = 0;
     state.revealed = false;
     resetCurrentAnswer();
     localStorage.removeItem(STORAGE_KEYS.pairs);
-    localStorage.removeItem(STORAGE_KEYS.review);
+    localStorage.removeItem(STORAGE_KEYS.progress);
     renderAll();
-    setStatus('Wyczyszczono dane.');
+    setStatus('Wyczyszczono zaimportowaną listę. Lista powtórek została zachowana.');
   }
 
   function clearReview() {
-    if (!state.reviewNumbers.length) {
+    if (!state.reviewItems.length) {
       setStatus('Lista powtórek już jest pusta.', 'warning');
       return;
     }
     if (!confirm('Czy wyczyścić całą listę powtórek?')) return;
-    state.reviewNumbers = [];
+    state.reviewItems = [];
     saveReview();
     if (state.mode === 'review') state.currentIndex = 0;
     renderAll();
     setStatus('Wyczyszczono listę powtórek.');
   }
 
-  function removeFromReview(nr) {
-    state.reviewNumbers = state.reviewNumbers.filter((item) => String(item) !== String(nr));
+  function removeFromReview(key) {
+    state.reviewItems = state.reviewItems.filter((item) => pairIdentity(item) !== key);
     saveReview();
-    if (state.mode === 'review') state.currentIndex = Math.max(0, state.currentIndex - 1);
+    if (state.mode === 'review') state.currentIndex = Math.max(0, Math.min(state.currentIndex, state.reviewItems.length - 1));
     renderAll();
     setStatus('Usunięto pozycję z listy powtórek.');
   }
@@ -1160,8 +1251,24 @@
   }
 
   function getReviewPairs() {
-    const reviewSet = new Set(state.reviewNumbers.map(String));
-    return state.pairs.filter((pair) => reviewSet.has(String(pair.nr)));
+    return uniquePairs(state.reviewItems);
+  }
+
+  function pairIdentity(pair) {
+    return [String(pair?.nr ?? '').trim(), String(pair?.pl ?? '').trim().toLowerCase(), String(pair?.en ?? '').trim().toLowerCase()].join('||');
+  }
+
+  function uniquePairs(pairs) {
+    const seen = new Set();
+    const result = [];
+    (pairs || []).forEach((pair) => {
+      if (!isValidPair(pair)) return;
+      const key = pairIdentity(pair);
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push({ nr: String(pair.nr).trim(), pl: String(pair.pl).trim(), en: String(pair.en).trim() });
+    });
+    return result;
   }
 
   function renderAll() {
@@ -1520,15 +1627,15 @@
     }
 
     const currentPair = getCurrentPair();
-    const currentNr = currentPair ? String(currentPair.nr) : '';
-    const activeNumbers = new Set(getActiveList().map((pair) => String(pair.nr)));
+    const currentKey = currentPair ? pairIdentity(currentPair) : '';
+    const activeKeys = new Set(getActiveList().map((pair) => pairIdentity(pair)));
 
     state.pairs.forEach((pair) => {
       const row = document.createElement('tr');
       row.tabIndex = 0;
       row.dataset.nr = pair.nr;
-      if (String(pair.nr) === currentNr) row.classList.add('active-row');
-      if (!activeNumbers.has(String(pair.nr))) row.classList.add('inactive-row');
+      if (pairIdentity(pair) === currentKey) row.classList.add('active-row');
+      if (!activeKeys.has(pairIdentity(pair))) row.classList.add('inactive-row');
 
       const nrCell = document.createElement('td');
       nrCell.textContent = pair.nr;
@@ -1552,6 +1659,7 @@
   function renderReviewList() {
     const reviewPairs = getReviewPairs();
     el.reviewList.innerHTML = '';
+    if (el.reviewCount) el.reviewCount.textContent = `${reviewPairs.length} pozycji`;
 
     if (!reviewPairs.length) {
       el.reviewList.textContent = 'Lista powtórek jest pusta.';
@@ -1574,7 +1682,7 @@
       const removeButton = document.createElement('button');
       removeButton.className = 'btn btn-danger';
       removeButton.textContent = 'Usuń';
-      removeButton.addEventListener('click', () => removeFromReview(pair.nr));
+      removeButton.addEventListener('click', () => removeFromReview(pairIdentity(pair)));
 
       item.append(nr, text, removeButton);
       el.reviewList.append(item);
@@ -1583,8 +1691,8 @@
 
   function renderImportInfo() {
     el.importInfo.textContent = state.pairs.length
-      ? `Aktualnie zapisano lokalnie ${state.pairs.length} pozycji.`
-      : 'Brak zaimportowanych danych.';
+      ? `Aktualnie zapisano lokalnie ${state.pairs.length} pozycji. Lista powtórek jest zapisywana niezależnie.`
+      : 'Brak zaimportowanych danych. Lista powtórek jest zachowana niezależnie.';
   }
 
   function setStatus(message, type = '') {
