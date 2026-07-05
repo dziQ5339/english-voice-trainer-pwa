@@ -1,38 +1,77 @@
-# Angielski Głosowo — PWA v8
+# Angielski Głosowo — PWA v9
 
-Prosta aplikacja PWA do głosowej nauki angielskich słówek i zdań na Androidzie oraz komputerze.
+Prosta aplikacja PWA do głosowej nauki angielskich słówek i zdań na podstawie własnej listy `Nr;Polski;English`.
 
-## Nowości w v8
+## Najważniejsze zmiany w v9
 
-- Dodano ustawienie **Sterowanie słuchawkami Bluetooth**.
-- Po włączeniu ustawienia aplikacja wykorzystuje **Media Session API**.
-- Mapowanie przycisków/gestów multimedialnych:
-  - `Play/Pause` = **Sprawdź / test**,
-  - `Next track` = **Następne / dalej**,
-  - `Previous track` = **Poprzednie / cofnij**.
-- Dodano status: **Sterowanie słuchawkami aktywne**.
-- Dodano zabezpieczenie przed podwójnym wywołaniem, gdy jedno kliknięcie słuchawek wysyła dwa zdarzenia.
-- Zmieniono cache service workera na `english-voice-trainer-v8`, aby telefon łatwiej pobrał nową wersję.
+### 1. Tryb samochodowy
 
-## Ważne ograniczenia sterowania słuchawkami
+Dodano opcję **Tryb samochodowy — automatyczne sterowanie czasem**.
 
-Funkcja jest eksperymentalna, ponieważ aplikacja PWA nie widzi bezpośrednio surowych kliknięć słuchawek Bluetooth. Może reagować tylko na zdarzenia multimedialne przekazane przez system i przeglądarkę, np. `play`, `pause`, `nexttrack`, `previoustrack`.
+Po włączeniu:
 
-Największa szansa działania:
+1. aplikacja czyta numer i tekst po polsku,
+2. czeka ustawioną liczbę sekund na odpowiedź użytkownika,
+3. automatycznie uruchamia funkcję **Sprawdź**,
+4. czyta poprawną odpowiedź po angielsku,
+5. po ustawionym czasie przechodzi do następnej pary.
 
-- telefon Samsung z Androidem,
-- Chrome,
-- aplikacja uruchomiona jako PWA przez HTTPS, np. GitHub Pages,
-- słuchawki Bluetooth połączone z telefonem,
-- brak aktywnego Spotify, YouTube lub innego odtwarzacza przejmującego przyciski słuchawek.
+Dostępne ustawienia:
+
+- **Czas na odpowiedź przed sprawdzeniem [s]** — domyślnie 8 s,
+- **Czas po sprawdzeniu przed następną parą [s]** — domyślnie 4 s.
+
+Ten tryb jest przeznaczony do sytuacji, w których użytkownik nie chce albo nie może klikać przycisków. Podczas jazdy samochodem nie należy obsługiwać telefonu ręcznie.
+
+### 2. Sterowanie klawiaturą / pilotem Bluetooth HID
+
+Dodano opcję **Sterowanie klawiaturą / pilotem Bluetooth**.
+
+Aplikacja reaguje na zwykłe klawisze klawiatury albo małego pilota Bluetooth działającego jako klawiatura HID, nie jako pilot multimedialny.
+
+Domyślne skróty:
+
+| Funkcja | Klawisz |
+|---|---|
+| Sprawdź | Enter |
+| Następne | Strzałka w prawo |
+| Poprzednie | Strzałka w lewo |
+| Dodaj do powtórek | D |
+| Powtórz | R |
+| Mikrofon | M |
+| Start / Stop | S |
+
+Każdy skrót można zmienić: kliknij pole z przypisanym klawiszem i naciśnij nowy klawisz.
+
+### 3. Zmieniony cache PWA
+
+Service worker używa cache `english-voice-trainer-v9`, żeby telefon łatwiej pobrał nową wersję po aktualizacji GitHub Pages.
+
+## Struktura plików
+
+```text
+english-voice-trainer-pwa-v9/
+├── index.html
+├── styles.css
+├── app.js
+├── manifest.webmanifest
+├── sw.js
+├── sample.csv
+├── README.md
+└── icons/
+    ├── icon-192.png
+    └── icon-512.png
+```
 
 ## Uruchomienie lokalnie na komputerze
 
-```cmd
+Wejdź do folderu aplikacji i uruchom:
+
+```bash
 python -m http.server 8000
 ```
 
-Następnie otwórz:
+Następnie otwórz w przeglądarce:
 
 ```text
 http://localhost:8000
@@ -40,20 +79,16 @@ http://localhost:8000
 
 ## Aktualizacja na GitHub Pages
 
-1. Rozpakuj paczkę `english-voice-trainer-pwa-v8.zip`.
-2. Wgraj wszystkie pliki z folderu `english-voice-trainer-pwa-v8` do głównego katalogu repozytorium.
-3. Upewnij się, że `index.html` jest w głównym katalogu, a nie w podfolderze.
+1. Rozpakuj `english-voice-trainer-pwa-v9.zip`.
+2. Wgraj pliki do głównego katalogu repozytorium GitHub.
+3. Upewnij się, że `index.html` jest bezpośrednio w głównym katalogu repozytorium.
 4. Kliknij **Commit changes**.
-5. Poczekaj na zielony status w zakładce **Actions**.
-6. Na telefonie odśwież PWA. Jeżeli dalej widać starą wersję, wyczyść dane strony/aplikacji w Chrome.
+5. Wejdź w **Actions** i poczekaj na zielony status publikacji.
+6. Na telefonie odśwież aplikację. Gdy nadal pokazuje starą wersję, wyczyść dane strony/PWA w Chrome.
 
-## Test sterowania słuchawkami
+## Ograniczenia
 
-1. Otwórz aplikację na telefonie.
-2. Połącz słuchawki Bluetooth.
-3. W ustawieniach aplikacji włącz **Sterowanie słuchawkami Bluetooth**.
-4. Sprawdź status: powinno pojawić się **Sterowanie słuchawkami aktywne**.
-5. Uruchom naukę przyciskiem **Start**.
-6. Użyj gestu/przycisku `Play/Pause` — aplikacja powinna wykonać **Sprawdź**.
-7. Użyj gestu/przycisku `Next track` — aplikacja powinna wykonać **Następne**.
-8. Użyj gestu/przycisku `Previous track` — aplikacja powinna wykonać **Poprzednie**.
+- Rozpoznawanie mowy zależy od przeglądarki, mikrofonu, internetu i ustawień Androida.
+- Sterowanie słuchawkami Bluetooth przez Media Session API jest eksperymentalne i nie zawsze działa.
+- Sterowanie klawiaturą/pilotem Bluetooth wymaga urządzenia, które wysyła zwykłe klawisze HID, np. Enter, strzałki, litery.
+- Tryb samochodowy działa lokalnie w aplikacji i nie wymaga dodatkowego API.

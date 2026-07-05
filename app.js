@@ -20,7 +20,18 @@
     autoMic: true,
     autoLanguageSwitch: true,
     keepScreenAwake: true,
-    bluetoothControls: false
+    bluetoothControls: false,
+    carMode: false,
+    carAnswerDelay: 8,
+    carAfterCheckDelay: 4,
+    keyboardControls: false,
+    shortcutCheck: 'Enter',
+    shortcutNext: 'ArrowRight',
+    shortcutPrev: 'ArrowLeft',
+    shortcutAdd: 'd',
+    shortcutRepeat: 'r',
+    shortcutMic: 'm',
+    shortcutStartStop: 's'
   };
 
   const state = {
@@ -41,6 +52,10 @@
     headsetControlsActive: false,
     lastMediaActionKey: '',
     lastMediaActionTime: 0,
+    carCheckTimer: null,
+    carNextTimer: null,
+    lastKeyboardActionKey: '',
+    lastKeyboardActionTime: 0,
     restartRecognitionAfterSpeech: false,
     changingRecognitionLanguage: false,
     recognitionRestartTimer: null,
@@ -102,6 +117,19 @@
     autoLanguageSwitch: document.getElementById('autoLanguageSwitch'),
     keepScreenAwake: document.getElementById('keepScreenAwake'),
     bluetoothControls: document.getElementById('bluetoothControls'),
+    carMode: document.getElementById('carMode'),
+    carAnswerDelay: document.getElementById('carAnswerDelay'),
+    carAfterCheckDelay: document.getElementById('carAfterCheckDelay'),
+    carModeStatus: document.getElementById('carModeStatus'),
+    keyboardControls: document.getElementById('keyboardControls'),
+    shortcutCheck: document.getElementById('shortcutCheck'),
+    shortcutNext: document.getElementById('shortcutNext'),
+    shortcutPrev: document.getElementById('shortcutPrev'),
+    shortcutAdd: document.getElementById('shortcutAdd'),
+    shortcutRepeat: document.getElementById('shortcutRepeat'),
+    shortcutMic: document.getElementById('shortcutMic'),
+    shortcutStartStop: document.getElementById('shortcutStartStop'),
+    keyboardStatus: document.getElementById('keyboardStatus'),
     headsetStatus: document.getElementById('headsetStatus'),
     micBtn: document.getElementById('micBtn'),
     testPlBtn: document.getElementById('testPlBtn'),
@@ -124,6 +152,7 @@
     setupSpeechRecognition();
     setupWakeLock();
     setupMediaSession();
+    setupKeyboardControls();
     loadVoices();
     applySettingsToUi();
     renderAll();
@@ -241,6 +270,52 @@
       }
     });
 
+    el.carMode.addEventListener('change', () => {
+      state.settings.carMode = el.carMode.checked;
+      saveSettings();
+      updateCarModeStatus();
+      if (!state.settings.carMode) {
+        clearCarTimers();
+        setStatus('Tryb samochodowy wyłączony. Aplikacja czeka na komendy i przyciski.');
+      } else {
+        setStatus('Tryb samochodowy włączony. Aplikacja będzie automatycznie sprawdzać odpowiedź i przechodzić dalej.');
+        scheduleCarAnswerCheck();
+      }
+    });
+
+    el.carAnswerDelay.addEventListener('input', () => {
+      state.settings.carAnswerDelay = clampNumber(el.carAnswerDelay.value, 2, 60, DEFAULT_SETTINGS.carAnswerDelay);
+      el.carAnswerDelay.value = String(state.settings.carAnswerDelay);
+      saveSettings();
+      updateCarModeStatus();
+      scheduleCarAnswerCheck();
+    });
+
+    el.carAfterCheckDelay.addEventListener('input', () => {
+      state.settings.carAfterCheckDelay = clampNumber(el.carAfterCheckDelay.value, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay);
+      el.carAfterCheckDelay.value = String(state.settings.carAfterCheckDelay);
+      saveSettings();
+      updateCarModeStatus();
+      if (state.revealed) scheduleCarNextPair();
+    });
+
+    el.keyboardControls.addEventListener('change', () => {
+      state.settings.keyboardControls = el.keyboardControls.checked;
+      saveSettings();
+      updateKeyboardStatus();
+      setStatus(state.settings.keyboardControls
+        ? 'Sterowanie klawiaturą albo pilotem Bluetooth HID jest włączone.'
+        : 'Sterowanie klawiaturą albo pilotem Bluetooth HID jest wyłączone.');
+    });
+
+    bindShortcutInput(el.shortcutCheck, 'shortcutCheck');
+    bindShortcutInput(el.shortcutNext, 'shortcutNext');
+    bindShortcutInput(el.shortcutPrev, 'shortcutPrev');
+    bindShortcutInput(el.shortcutAdd, 'shortcutAdd');
+    bindShortcutInput(el.shortcutRepeat, 'shortcutRepeat');
+    bindShortcutInput(el.shortcutMic, 'shortcutMic');
+    bindShortcutInput(el.shortcutStartStop, 'shortcutStartStop');
+
     el.micBtn.addEventListener('click', toggleListening);
     el.testPlBtn.addEventListener('click', () => speak('To jest test polskiego głosu.', 'pl-PL'));
     el.testEnBtn.addEventListener('click', () => speak('This is a test of the English voice.', 'en-US'));
@@ -339,6 +414,13 @@
     el.autoLanguageSwitch.checked = Boolean(state.settings.autoLanguageSwitch);
     el.keepScreenAwake.checked = Boolean(state.settings.keepScreenAwake);
     el.bluetoothControls.checked = Boolean(state.settings.bluetoothControls);
+    el.carMode.checked = Boolean(state.settings.carMode);
+    el.carAnswerDelay.value = String(clampNumber(state.settings.carAnswerDelay, 2, 60, DEFAULT_SETTINGS.carAnswerDelay));
+    el.carAfterCheckDelay.value = String(clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay));
+    el.keyboardControls.checked = Boolean(state.settings.keyboardControls);
+    renderShortcutInputs();
+    updateCarModeStatus();
+    updateKeyboardStatus();
   }
 
   function setupPwa() {
@@ -529,6 +611,222 @@
 
   function updateHeadsetStatus(text) {
     if (el.headsetStatus) el.headsetStatus.textContent = text;
+  }
+
+
+
+  function setupKeyboardControls() {
+    document.addEventListener('keydown', handleGlobalShortcut);
+  }
+
+  function bindShortcutInput(input, settingKey) {
+    if (!input) return;
+    input.addEventListener('keydown', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const key = normalizeKeyboardKey(event.key);
+      if (!key) return;
+      state.settings[settingKey] = key;
+      saveSettings();
+      renderShortcutInputs();
+      updateKeyboardStatus();
+      setStatus(`Przypisano skrót: ${getShortcutActionLabel(settingKey)} = ${formatShortcutKey(key)}.`);
+    });
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('click', () => input.select());
+  }
+
+  function handleGlobalShortcut(event) {
+    if (!state.settings.keyboardControls) return;
+    if (isEditableElement(event.target)) return;
+
+    const key = normalizeKeyboardKey(event.key);
+    const action = shortcutActionForKey(key);
+    if (!action) return;
+
+    event.preventDefault();
+    runKeyboardAction(action);
+  }
+
+  function isEditableElement(target) {
+    if (!target) return false;
+    const tag = String(target.tagName || '').toLowerCase();
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+  }
+
+  function normalizeKeyboardKey(key) {
+    if (!key || key === 'Unidentified' || key === 'Dead') return '';
+    if (key === ' ') return 'Space';
+    if (key.length === 1) return key.toLowerCase();
+    return key;
+  }
+
+  function formatShortcutKey(key) {
+    const labels = {
+      Space: 'Spacja',
+      Enter: 'Enter',
+      ArrowRight: '→',
+      ArrowLeft: '←',
+      ArrowUp: '↑',
+      ArrowDown: '↓',
+      Escape: 'Esc'
+    };
+    return labels[key] || String(key).toUpperCase();
+  }
+
+  function shortcutActionForKey(key) {
+    const shortcuts = {
+      check: state.settings.shortcutCheck,
+      next: state.settings.shortcutNext,
+      prev: state.settings.shortcutPrev,
+      addReview: state.settings.shortcutAdd,
+      repeat: state.settings.shortcutRepeat,
+      mic: state.settings.shortcutMic,
+      startStop: state.settings.shortcutStartStop
+    };
+
+    return Object.entries(shortcuts).find(([, shortcut]) => normalizeKeyboardKey(shortcut) === key)?.[0] || null;
+  }
+
+  function runKeyboardAction(action) {
+    const now = Date.now();
+    const sameActionTooSoon = state.lastKeyboardActionKey === action && now - state.lastKeyboardActionTime < 700;
+    const anyActionTooSoon = now - state.lastKeyboardActionTime < 120;
+    if (sameActionTooSoon || anyActionTooSoon) return;
+
+    state.lastKeyboardActionKey = action;
+    state.lastKeyboardActionTime = now;
+
+    const actions = {
+      check: revealAnswer,
+      next: nextPair,
+      prev: prevPair,
+      addReview: addCurrentToReview,
+      repeat: repeatCurrent,
+      mic: toggleListening,
+      startStop: () => state.running ? stopStudy() : startStudy()
+    };
+
+    if (actions[action]) {
+      actions[action]();
+      updateKeyboardStatus(`Skrót: ${getShortcutRuntimeLabel(action)}.`);
+    }
+  }
+
+  function getShortcutActionLabel(settingKey) {
+    const labels = {
+      shortcutCheck: 'Sprawdź',
+      shortcutNext: 'Następne',
+      shortcutPrev: 'Poprzednie',
+      shortcutAdd: 'Dodaj',
+      shortcutRepeat: 'Powtórz',
+      shortcutMic: 'Mikrofon',
+      shortcutStartStop: 'Start / Stop'
+    };
+    return labels[settingKey] || settingKey;
+  }
+
+  function getShortcutRuntimeLabel(action) {
+    const labels = {
+      check: 'Sprawdź',
+      next: 'Następne',
+      prev: 'Poprzednie',
+      addReview: 'Dodaj do powtórek',
+      repeat: 'Powtórz',
+      mic: 'Mikrofon',
+      startStop: 'Start / Stop'
+    };
+    return labels[action] || action;
+  }
+
+  function renderShortcutInputs() {
+    const map = {
+      shortcutCheck: el.shortcutCheck,
+      shortcutNext: el.shortcutNext,
+      shortcutPrev: el.shortcutPrev,
+      shortcutAdd: el.shortcutAdd,
+      shortcutRepeat: el.shortcutRepeat,
+      shortcutMic: el.shortcutMic,
+      shortcutStartStop: el.shortcutStartStop
+    };
+    Object.entries(map).forEach(([settingKey, input]) => {
+      if (!input) return;
+      const value = state.settings[settingKey] || DEFAULT_SETTINGS[settingKey];
+      input.value = formatShortcutKey(value);
+      input.dataset.shortcut = value;
+      input.title = 'Kliknij tutaj i naciśnij klawisz, który chcesz przypisać.';
+    });
+  }
+
+  function updateKeyboardStatus(prefix = '') {
+    if (!el.keyboardStatus) return;
+    const status = state.settings.keyboardControls ? 'Sterowanie klawiaturą/pilotem aktywne.' : 'Sterowanie klawiaturą/pilotem wyłączone.';
+    const map = ` Sprawdź=${formatShortcutKey(state.settings.shortcutCheck)}, Następne=${formatShortcutKey(state.settings.shortcutNext)}, Poprzednie=${formatShortcutKey(state.settings.shortcutPrev)}, Dodaj=${formatShortcutKey(state.settings.shortcutAdd)}, Powtórz=${formatShortcutKey(state.settings.shortcutRepeat)}, Mikrofon=${formatShortcutKey(state.settings.shortcutMic)}, Start/Stop=${formatShortcutKey(state.settings.shortcutStartStop)}.`;
+    el.keyboardStatus.textContent = `${prefix ? `${prefix} ` : ''}${status}${map}`;
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(number)));
+  }
+
+  function updateCarModeStatus() {
+    if (!el.carModeStatus) return;
+    const answerDelay = clampNumber(state.settings.carAnswerDelay, 2, 60, DEFAULT_SETTINGS.carAnswerDelay);
+    const afterCheckDelay = clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay);
+    const status = state.settings.carMode ? 'Tryb samochodowy aktywny.' : 'Tryb samochodowy wyłączony.';
+    el.carModeStatus.textContent = `${status} Sprawdzenie po ${answerDelay} s, następna para po ${afterCheckDelay} s.`;
+  }
+
+  function clearCarTimers() {
+    clearCarCheckTimer();
+    clearCarNextTimer();
+  }
+
+  function clearCarCheckTimer() {
+    if (state.carCheckTimer) {
+      clearTimeout(state.carCheckTimer);
+      state.carCheckTimer = null;
+    }
+  }
+
+  function clearCarNextTimer() {
+    if (state.carNextTimer) {
+      clearTimeout(state.carNextTimer);
+      state.carNextTimer = null;
+    }
+  }
+
+  function scheduleCarAnswerCheck() {
+    clearCarCheckTimer();
+    if (!state.settings.carMode || !state.running || state.revealed || !getCurrentPair()) return;
+    const delay = clampNumber(state.settings.carAnswerDelay, 2, 60, DEFAULT_SETTINGS.carAnswerDelay) * 1000;
+    state.carCheckTimer = window.setTimeout(() => {
+      state.carCheckTimer = null;
+      if (state.settings.carMode && state.running && !state.revealed) {
+        revealAnswer();
+      }
+    }, delay);
+    updateCarModeStatus();
+  }
+
+  function scheduleCarNextPair() {
+    clearCarNextTimer();
+    if (!state.settings.carMode || !state.running || !state.revealed) return;
+    const list = getActiveList();
+    if (!list.length || state.currentIndex >= list.length - 1) {
+      setStatus('Tryb samochodowy: to ostatnia pozycja na liście. Nauka zatrzymana na końcu listy.', 'warning');
+      return;
+    }
+    const delay = clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay) * 1000;
+    state.carNextTimer = window.setTimeout(() => {
+      state.carNextTimer = null;
+      if (state.settings.carMode && state.running && state.revealed) {
+        nextPair();
+      }
+    }, delay);
+    updateCarModeStatus();
   }
 
   function setupSpeechRecognition() {
@@ -870,11 +1168,11 @@
       || null;
   }
 
-  function speak(text, lang) {
-    speakMany([{ text, lang }]);
+  function speak(text, lang, onDone) {
+    speakMany([{ text, lang }], onDone);
   }
 
-  function speakMany(items) {
+  function speakMany(items, onDone) {
     if (!('speechSynthesis' in window)) return;
     const queue = items.filter((item) => item && item.text);
     if (!queue.length) return;
@@ -890,6 +1188,9 @@
       if (state.running && state.settings.autoMic && state.recognition && !state.listening) {
         state.listening = true;
         scheduleRecognitionRestart(250);
+      }
+      if (typeof onDone === 'function') {
+        window.setTimeout(onDone, 0);
       }
     };
 
@@ -918,9 +1219,9 @@
     speakNext();
   }
 
-  function speakPolishPrompt(pair) {
+  function speakPolishPrompt(pair, onDone) {
     if (!pair) return;
-    speak(`${pair.nr}. ${pair.pl}`, 'pl-PL');
+    speak(`${pair.nr}. ${pair.pl}`, 'pl-PL', onDone);
   }
 
   function getActiveList() {
@@ -970,6 +1271,7 @@
     state.currentIndex = index;
     state.running = true;
     state.revealed = false;
+    clearCarTimers();
     resetCurrentAnswer();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
@@ -980,7 +1282,7 @@
 
     const pair = getCurrentPair();
     setStatus(`Start od numeru ${pair.nr}. Podaj odpowiedź po angielsku, a potem powiedz „test”.`);
-    if (pair) speakPolishPrompt(pair);
+    if (pair) speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
   function jumpToPairFromPreview(nr) {
@@ -1001,6 +1303,7 @@
 
     state.running = true;
     state.revealed = false;
+    clearCarTimers();
     if (state.currentIndex >= list.length) state.currentIndex = 0;
     resetCurrentAnswer();
     renderLearning();
@@ -1012,8 +1315,10 @@
     updateMediaPlaybackState();
     renderLoadedPairs();
     saveProgress();
-    setStatus('Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „test” albo kliknij Sprawdź. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
-    speakPolishPrompt(pair);
+    setStatus(state.settings.carMode
+      ? 'Start w trybie samochodowym. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
+      : 'Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „test” albo kliknij Sprawdź. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
+    speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
   function stopStudy() {
@@ -1022,6 +1327,7 @@
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     safeStopRecognition(false);
     releaseWakeLock();
+    clearCarTimers();
     updateMediaPlaybackState();
     el.micBtn.textContent = 'Mikrofon';
     saveProgress();
@@ -1036,6 +1342,7 @@
     }
 
     state.revealed = true;
+    clearCarCheckTimer();
     state.currentFeedback = evaluateCurrentAnswer(pair);
 
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('pl-PL', true);
@@ -1046,10 +1353,11 @@
     speakMany([
       { text: pair.en, lang: 'en-US' },
       { text: feedbackText, lang: 'pl-PL' }
-    ]);
+    ], scheduleCarNextPair);
   }
 
   function nextPair() {
+    clearCarTimers();
     const list = getActiveList();
     if (!list.length) {
       setStatus('Brak danych w aktualnym trybie.', 'warning');
@@ -1068,11 +1376,14 @@
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
-    setStatus('Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
-    speakPolishPrompt(pair);
+    setStatus(state.settings.carMode
+      ? 'Kolejna para. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
+      : 'Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
+    speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
   function prevPair() {
+    clearCarTimers();
     const list = getActiveList();
     if (!list.length) {
       setStatus('Brak danych w aktualnym trybie.', 'warning');
@@ -1091,8 +1402,10 @@
     const pair = getCurrentPair();
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
-    setStatus('Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
-    speakPolishPrompt(pair);
+    setStatus(state.settings.carMode
+      ? 'Poprzednia para. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
+      : 'Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
+    speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
   function repeatCurrent() {
@@ -1336,6 +1649,7 @@
     state.pairs = [];
     state.currentIndex = 0;
     state.revealed = false;
+    clearCarTimers();
     resetCurrentAnswer();
     localStorage.removeItem(STORAGE_KEYS.pairs);
     localStorage.removeItem(STORAGE_KEYS.progress);

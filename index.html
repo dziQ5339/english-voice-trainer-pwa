@@ -210,6 +210,43 @@
         </label>
       </div>
 
+      <details class="settings-details">
+        <summary>Tryb samochodowy — automatyczne sterowanie czasem</summary>
+        <div class="settings-grid nested-settings">
+          <label class="checkbox-label">
+            <input id="carMode" type="checkbox" />
+            Tryb samochodowy: automatycznie sprawdzaj i przechodź dalej
+          </label>
+          <label>
+            Czas na odpowiedź przed sprawdzeniem [s]
+            <input id="carAnswerDelay" type="number" inputmode="numeric" min="2" max="60" step="1" value="8" />
+          </label>
+          <label>
+            Czas po sprawdzeniu przed następną parą [s]
+            <input id="carAfterCheckDelay" type="number" inputmode="numeric" min="1" max="30" step="1" value="4" />
+          </label>
+        </div>
+        <div id="carModeStatus" class="small-info">Tryb samochodowy wyłączony.</div>
+      </details>
+
+      <details class="settings-details">
+        <summary>Sterowanie klawiaturą / pilotem Bluetooth</summary>
+        <div class="settings-grid nested-settings">
+          <label class="checkbox-label">
+            <input id="keyboardControls" type="checkbox" />
+            Reaguj na skróty klawiatury albo pilot Bluetooth HID
+          </label>
+          <label>Sprawdź <input id="shortcutCheck" class="shortcut-input" type="text" value="Enter" readonly /></label>
+          <label>Następne <input id="shortcutNext" class="shortcut-input" type="text" value="ArrowRight" readonly /></label>
+          <label>Poprzednie <input id="shortcutPrev" class="shortcut-input" type="text" value="ArrowLeft" readonly /></label>
+          <label>Dodaj do powtórek <input id="shortcutAdd" class="shortcut-input" type="text" value="D" readonly /></label>
+          <label>Powtórz <input id="shortcutRepeat" class="shortcut-input" type="text" value="R" readonly /></label>
+          <label>Mikrofon <input id="shortcutMic" class="shortcut-input" type="text" value="M" readonly /></label>
+          <label>Start / Stop <input id="shortcutStartStop" class="shortcut-input" type="text" value="S" readonly /></label>
+        </div>
+        <div id="keyboardStatus" class="small-info">Sterowanie klawiaturą/pilotem wyłączone. Kliknij pole skrótu i naciśnij wybrany klawisz, aby go przypisać.</div>
+      </details>
+
       <div id="headsetStatus" class="small-info headset-status">Sterowanie słuchawkami wyłączone.</div>
 
       <div class="button-row">
