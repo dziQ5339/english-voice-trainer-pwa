@@ -846,3 +846,66 @@ button:focus-visible {
 #keyboardStatus {
   padding: 0 14px 14px;
 }
+
+/* v10: widoczny licznik trybu samochodowego */
+.car-countdown {
+  border: 2px solid var(--primary);
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 10px 12px;
+  margin: 8px 0 10px;
+  box-shadow: 0 6px 18px rgba(16, 42, 67, 0.12);
+}
+
+.car-countdown-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 900;
+}
+
+.car-countdown-main span {
+  color: var(--primary);
+}
+
+.car-countdown-main strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.car-countdown-track {
+  height: 10px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: #d9e2ec;
+  overflow: hidden;
+}
+
+.car-countdown-track span {
+  display: block;
+  width: 0%;
+  height: 100%;
+  background: var(--primary);
+  transition: width 180ms linear;
+}
+
+@media (max-width: 520px) {
+  .car-countdown {
+    padding: 9px 10px;
+    margin: 6px 0 8px;
+  }
+
+  .car-countdown-main strong {
+    min-width: 64px;
+    font-size: 1.25rem;
+  }
+}

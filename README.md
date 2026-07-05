@@ -1,56 +1,51 @@
-# Angielski Głosowo — PWA v9
+# Angielski Głosowo — PWA v10
 
 Prosta aplikacja PWA do głosowej nauki angielskich słówek i zdań na podstawie własnej listy `Nr;Polski;English`.
 
-## Najważniejsze zmiany w v9
+## Najważniejsze zmiany w v10
 
-### 1. Tryb samochodowy
+### 1. Poprawiony tryb samochodowy
 
-Dodano opcję **Tryb samochodowy — automatyczne sterowanie czasem**.
+W wersji v10 poprawiono mechanizm automatycznego działania trybu samochodowego. W poprzedniej wersji przejście do automatycznego sprawdzenia lub następnej pary mogło nie uruchomić się poprawnie, jeżeli przeglądarka nie zwróciła zdarzenia zakończenia syntezy mowy.
 
-Po włączeniu:
+Dodano bezpiecznik czasowy dla odczytu głosowego. Dzięki temu aplikacja powinna kontynuować tryb samochodowy nawet wtedy, gdy Web Speech API nie zgłosi poprawnie końca odczytywania.
 
-1. aplikacja czyta numer i tekst po polsku,
-2. czeka ustawioną liczbę sekund na odpowiedź użytkownika,
-3. automatycznie uruchamia funkcję **Sprawdź**,
-4. czyta poprawną odpowiedź po angielsku,
-5. po ustawionym czasie przechodzi do następnej pary.
+### 2. Widoczny licznik odliczający wstecz
 
-Dostępne ustawienia:
+Dodano widoczny licznik trybu samochodowego na głównym ekranie nauki.
 
-- **Czas na odpowiedź przed sprawdzeniem [s]** — domyślnie 8 s,
-- **Czas po sprawdzeniu przed następną parą [s]** — domyślnie 4 s.
+Licznik pokazuje:
 
-Ten tryb jest przeznaczony do sytuacji, w których użytkownik nie chce albo nie może klikać przycisków. Podczas jazdy samochodem nie należy obsługiwać telefonu ręcznie.
+- ile sekund zostało do automatycznego sprawdzenia odpowiedzi,
+- ile sekund zostało do przejścia do następnej pary.
 
-### 2. Sterowanie klawiaturą / pilotem Bluetooth HID
+Przykładowe komunikaty:
 
-Dodano opcję **Sterowanie klawiaturą / pilotem Bluetooth**.
+```text
+Automatyczne sprawdzenie za: 8 s
+Następna para za: 4 s
+```
 
-Aplikacja reaguje na zwykłe klawisze klawiatury albo małego pilota Bluetooth działającego jako klawiatura HID, nie jako pilot multimedialny.
+### 3. Zachowane funkcje v9
 
-Domyślne skróty:
+Pozostają funkcje z wersji v9:
 
-| Funkcja | Klawisz |
-|---|---|
-| Sprawdź | Enter |
-| Następne | Strzałka w prawo |
-| Poprzednie | Strzałka w lewo |
-| Dodaj do powtórek | D |
-| Powtórz | R |
-| Mikrofon | M |
-| Start / Stop | S |
+- tryb samochodowy z ustawieniem czasów,
+- sterowanie klawiaturą / pilotem Bluetooth HID,
+- możliwość przypisywania własnych skrótów klawiszowych,
+- sterowanie słuchawkami Bluetooth przez Media Session API,
+- lista powtórek niezależna od aktualnej listy,
+- zapamiętywanie ostatniej pozycji,
+- obsługa polskich znaków w imporcie CSV.
 
-Każdy skrót można zmienić: kliknij pole z przypisanym klawiszem i naciśnij nowy klawisz.
+### 4. Zmieniony cache PWA
 
-### 3. Zmieniony cache PWA
-
-Service worker używa cache `english-voice-trainer-v9`, żeby telefon łatwiej pobrał nową wersję po aktualizacji GitHub Pages.
+Service worker używa cache `english-voice-trainer-v10`, żeby telefon łatwiej pobrał nową wersję po aktualizacji GitHub Pages.
 
 ## Struktura plików
 
 ```text
-english-voice-trainer-pwa-v9/
+english-voice-trainer-pwa-v10/
 ├── index.html
 ├── styles.css
 ├── app.js
@@ -77,9 +72,21 @@ Następnie otwórz w przeglądarce:
 http://localhost:8000
 ```
 
+## Jak przetestować tryb samochodowy
+
+1. Zaimportuj przykładowe dane albo własny plik CSV.
+2. W ustawieniach rozwiń sekcję **Tryb samochodowy — automatyczne sterowanie czasem**.
+3. Zaznacz **Tryb samochodowy: automatycznie sprawdzaj i przechodź dalej**.
+4. Ustaw dla testu krótkie czasy, np.:
+   - czas na odpowiedź: `4 s`,
+   - czas po sprawdzeniu: `2 s`.
+5. Kliknij **Start**.
+6. Po odczytaniu tekstu po polsku powinien pojawić się licznik odliczający do sprawdzenia.
+7. Po sprawdzeniu powinien pojawić się licznik odliczający do następnej pary.
+
 ## Aktualizacja na GitHub Pages
 
-1. Rozpakuj `english-voice-trainer-pwa-v9.zip`.
+1. Rozpakuj `english-voice-trainer-pwa-v10.zip`.
 2. Wgraj pliki do głównego katalogu repozytorium GitHub.
 3. Upewnij się, że `index.html` jest bezpośrednio w głównym katalogu repozytorium.
 4. Kliknij **Commit changes**.
@@ -89,6 +96,7 @@ http://localhost:8000
 ## Ograniczenia
 
 - Rozpoznawanie mowy zależy od przeglądarki, mikrofonu, internetu i ustawień Androida.
+- Synteza mowy Web Speech API na telefonach może czasem działać niestabilnie. W v10 dodano obejście, ale przeglądarka nadal może mieć własne ograniczenia.
 - Sterowanie słuchawkami Bluetooth przez Media Session API jest eksperymentalne i nie zawsze działa.
 - Sterowanie klawiaturą/pilotem Bluetooth wymaga urządzenia, które wysyła zwykłe klawisze HID, np. Enter, strzałki, litery.
 - Tryb samochodowy działa lokalnie w aplikacji i nie wymaga dodatkowego API.

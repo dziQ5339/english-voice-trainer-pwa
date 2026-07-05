@@ -1,4 +1,4 @@
-const CACHE_NAME = 'english-voice-trainer-v9';
+const CACHE_NAME = 'english-voice-trainer-v10';
 const APP_SHELL = [
   './',
   './index.html',

@@ -54,6 +54,11 @@
     lastMediaActionTime: 0,
     carCheckTimer: null,
     carNextTimer: null,
+    carCountdownInterval: null,
+    carCountdownPhase: '',
+    carCountdownLabel: '',
+    carCountdownEndAt: 0,
+    carCountdownTotalMs: 0,
     lastKeyboardActionKey: '',
     lastKeyboardActionTime: 0,
     restartRecognitionAfterSpeech: false,
@@ -121,6 +126,10 @@
     carAnswerDelay: document.getElementById('carAnswerDelay'),
     carAfterCheckDelay: document.getElementById('carAfterCheckDelay'),
     carModeStatus: document.getElementById('carModeStatus'),
+    carCountdownBox: document.getElementById('carCountdownBox'),
+    carCountdownLabel: document.getElementById('carCountdownLabel'),
+    carCountdownValue: document.getElementById('carCountdownValue'),
+    carCountdownBar: document.getElementById('carCountdownBar'),
     keyboardControls: document.getElementById('keyboardControls'),
     shortcutCheck: document.getElementById('shortcutCheck'),
     shortcutNext: document.getElementById('shortcutNext'),
@@ -279,7 +288,10 @@
         setStatus('Tryb samochodowy wyłączony. Aplikacja czeka na komendy i przyciski.');
       } else {
         setStatus('Tryb samochodowy włączony. Aplikacja będzie automatycznie sprawdzać odpowiedź i przechodzić dalej.');
-        scheduleCarAnswerCheck();
+        if (state.running) {
+          if (state.revealed) scheduleCarNextPair();
+          else scheduleCarAnswerCheck();
+        }
       }
     });
 
@@ -296,7 +308,7 @@
       el.carAfterCheckDelay.value = String(state.settings.carAfterCheckDelay);
       saveSettings();
       updateCarModeStatus();
-      if (state.revealed) scheduleCarNextPair();
+      if (state.settings.carMode && state.running && state.revealed) scheduleCarNextPair();
     });
 
     el.keyboardControls.addEventListener('change', () => {
@@ -777,11 +789,13 @@
     const afterCheckDelay = clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay);
     const status = state.settings.carMode ? 'Tryb samochodowy aktywny.' : 'Tryb samochodowy wyłączony.';
     el.carModeStatus.textContent = `${status} Sprawdzenie po ${answerDelay} s, następna para po ${afterCheckDelay} s.`;
+    renderCarCountdown();
   }
 
   function clearCarTimers() {
     clearCarCheckTimer();
     clearCarNextTimer();
+    clearCarCountdown(true);
   }
 
   function clearCarCheckTimer() {
@@ -789,6 +803,7 @@
       clearTimeout(state.carCheckTimer);
       state.carCheckTimer = null;
     }
+    if (state.carCountdownPhase === 'answer') clearCarCountdown(false);
   }
 
   function clearCarNextTimer() {
@@ -796,36 +811,105 @@
       clearTimeout(state.carNextTimer);
       state.carNextTimer = null;
     }
+    if (state.carCountdownPhase === 'next') clearCarCountdown(false);
+  }
+
+  function startCarCountdown(phase, seconds, label) {
+    clearCarCountdown(false);
+    const totalMs = Math.max(1000, Math.round(Number(seconds) * 1000));
+    state.carCountdownPhase = phase;
+    state.carCountdownLabel = label;
+    state.carCountdownTotalMs = totalMs;
+    state.carCountdownEndAt = Date.now() + totalMs;
+    renderCarCountdown();
+    state.carCountdownInterval = window.setInterval(renderCarCountdown, 250);
+  }
+
+  function clearCarCountdown(resetText = false) {
+    if (state.carCountdownInterval) {
+      clearInterval(state.carCountdownInterval);
+      state.carCountdownInterval = null;
+    }
+    state.carCountdownPhase = '';
+    state.carCountdownLabel = '';
+    state.carCountdownEndAt = 0;
+    state.carCountdownTotalMs = 0;
+    if (resetText) renderCarCountdown();
+  }
+
+  function renderCarCountdown() {
+    if (!el.carCountdownBox) return;
+    const carModeActive = Boolean(state.settings.carMode);
+    const hasCountdown = carModeActive && state.carCountdownEndAt > 0 && state.carCountdownTotalMs > 0;
+
+    if (!carModeActive) {
+      el.carCountdownBox.hidden = true;
+      return;
+    }
+
+    el.carCountdownBox.hidden = false;
+
+    if (!hasCountdown) {
+      el.carCountdownLabel.textContent = state.running
+        ? 'Tryb samochodowy gotowy'
+        : 'Tryb samochodowy włączony';
+      el.carCountdownValue.textContent = '—';
+      el.carCountdownBar.style.width = '0%';
+      return;
+    }
+
+    const remainingMs = Math.max(0, state.carCountdownEndAt - Date.now());
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    const elapsedRatio = Math.min(1, Math.max(0, 1 - remainingMs / state.carCountdownTotalMs));
+    el.carCountdownLabel.textContent = state.carCountdownLabel || 'Odliczanie';
+    el.carCountdownValue.textContent = `${remainingSeconds} s`;
+    el.carCountdownBar.style.width = `${Math.round(elapsedRatio * 100)}%`;
+
+    if (remainingMs <= 0 && state.carCountdownInterval) {
+      clearInterval(state.carCountdownInterval);
+      state.carCountdownInterval = null;
+    }
   }
 
   function scheduleCarAnswerCheck() {
     clearCarCheckTimer();
-    if (!state.settings.carMode || !state.running || state.revealed || !getCurrentPair()) return;
-    const delay = clampNumber(state.settings.carAnswerDelay, 2, 60, DEFAULT_SETTINGS.carAnswerDelay) * 1000;
+    if (!state.settings.carMode || !state.running || state.revealed || !getCurrentPair()) {
+      renderCarCountdown();
+      return;
+    }
+    const delaySeconds = clampNumber(state.settings.carAnswerDelay, 2, 60, DEFAULT_SETTINGS.carAnswerDelay);
+    startCarCountdown('answer', delaySeconds, 'Automatyczne sprawdzenie za');
     state.carCheckTimer = window.setTimeout(() => {
       state.carCheckTimer = null;
       if (state.settings.carMode && state.running && !state.revealed) {
+        clearCarCountdown(false);
         revealAnswer();
       }
-    }, delay);
+    }, delaySeconds * 1000);
     updateCarModeStatus();
   }
 
   function scheduleCarNextPair() {
     clearCarNextTimer();
-    if (!state.settings.carMode || !state.running || !state.revealed) return;
+    if (!state.settings.carMode || !state.running || !state.revealed) {
+      renderCarCountdown();
+      return;
+    }
     const list = getActiveList();
     if (!list.length || state.currentIndex >= list.length - 1) {
+      clearCarCountdown(true);
       setStatus('Tryb samochodowy: to ostatnia pozycja na liście. Nauka zatrzymana na końcu listy.', 'warning');
       return;
     }
-    const delay = clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay) * 1000;
+    const delaySeconds = clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay);
+    startCarCountdown('next', delaySeconds, 'Następna para za');
     state.carNextTimer = window.setTimeout(() => {
       state.carNextTimer = null;
       if (state.settings.carMode && state.running && state.revealed) {
+        clearCarCountdown(false);
         nextPair();
       }
-    }, delay);
+    }, delaySeconds * 1000);
     updateCarModeStatus();
   }
 
@@ -1173,16 +1257,34 @@
   }
 
   function speakMany(items, onDone) {
-    if (!('speechSynthesis' in window)) return;
     const queue = items.filter((item) => item && item.text);
-    if (!queue.length) return;
+    if (!queue.length) {
+      if (typeof onDone === 'function') window.setTimeout(onDone, 0);
+      return;
+    }
+
+    if (!('speechSynthesis' in window)) {
+      if (typeof onDone === 'function') window.setTimeout(onDone, 0);
+      return;
+    }
 
     window.speechSynthesis.cancel();
     state.speaking = true;
     state.ignoreSpeechUntil = Date.now() + 800;
     let index = 0;
+    let finished = false;
+
+    const estimatedMs = estimateSpeechQueueMs(queue);
+    const fallbackTimer = window.setTimeout(() => {
+      // Na części telefonów zdarzenie onend z Web Speech API bywa niestabilne.
+      // Ten bezpiecznik powoduje, że tryb samochodowy nie zatrzyma się na stałe po odczycie.
+      finishSpeaking();
+    }, estimatedMs);
 
     const finishSpeaking = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(fallbackTimer);
       state.speaking = false;
       state.ignoreSpeechUntil = Date.now() + 900;
       if (state.running && state.settings.autoMic && state.recognition && !state.listening) {
@@ -1195,6 +1297,7 @@
     };
 
     const speakNext = () => {
+      if (finished) return;
       if (index >= queue.length) {
         finishSpeaking();
         return;
@@ -1217,6 +1320,13 @@
     };
 
     speakNext();
+  }
+
+  function estimateSpeechQueueMs(queue) {
+    const totalChars = queue.reduce((sum, item) => sum + String(item.text || '').length, 0);
+    const totalWords = queue.reduce((sum, item) => sum + String(item.text || '').split(/\s+/).filter(Boolean).length, 0);
+    // Ostrożny szacunek: krótka fraza nie kończy fallbacku zbyt szybko, a długie zdanie ma zapas.
+    return Math.min(30000, Math.max(2500, 1200 + totalWords * 520 + totalChars * 35));
   }
 
   function speakPolishPrompt(pair, onDone) {
@@ -1418,8 +1528,9 @@
       setStatus('Powtarzam odpowiedź angielską.');
       speak(pair.en, 'en-US');
     } else {
+      clearCarCheckTimer();
       setStatus('Powtarzam tekst polski.');
-      speakPolishPrompt(pair);
+      speakPolishPrompt(pair, state.settings.carMode && state.running ? scheduleCarAnswerCheck : undefined);
     }
   }
 
@@ -1731,6 +1842,7 @@
     renderReviewList();
     renderImportInfo();
     renderLoadedPairs();
+    updateCarModeStatus();
   }
 
   function renderLearning() {
@@ -1747,6 +1859,7 @@
     el.englishText.textContent = pair ? pair.en : '—';
     el.correctAnswerBox.hidden = !state.revealed;
     renderEvaluationState();
+    renderCarCountdown();
     renderLoadedPairs();
   }
 
