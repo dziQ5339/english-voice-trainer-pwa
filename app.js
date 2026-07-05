@@ -19,7 +19,8 @@
     evaluationMode: 'simple',
     autoMic: true,
     autoLanguageSwitch: true,
-    keepScreenAwake: true
+    keepScreenAwake: true,
+    bluetoothControls: false
   };
 
   const state = {
@@ -36,6 +37,10 @@
     currentFeedback: null,
     wakeLock: null,
     wakeLockSupported: false,
+    mediaSessionSupported: false,
+    headsetControlsActive: false,
+    lastMediaActionKey: '',
+    lastMediaActionTime: 0,
     restartRecognitionAfterSpeech: false,
     changingRecognitionLanguage: false,
     recognitionRestartTimer: null,
@@ -96,6 +101,8 @@
     autoMic: document.getElementById('autoMic'),
     autoLanguageSwitch: document.getElementById('autoLanguageSwitch'),
     keepScreenAwake: document.getElementById('keepScreenAwake'),
+    bluetoothControls: document.getElementById('bluetoothControls'),
+    headsetStatus: document.getElementById('headsetStatus'),
     micBtn: document.getElementById('micBtn'),
     testPlBtn: document.getElementById('testPlBtn'),
     testEnBtn: document.getElementById('testEnBtn'),
@@ -116,6 +123,7 @@
     setupPwa();
     setupSpeechRecognition();
     setupWakeLock();
+    setupMediaSession();
     loadVoices();
     applySettingsToUi();
     renderAll();
@@ -223,6 +231,16 @@
         : 'Opcja niewygaszania ekranu jest wyłączona.');
     });
 
+    el.bluetoothControls.addEventListener('change', () => {
+      state.settings.bluetoothControls = el.bluetoothControls.checked;
+      saveSettings();
+      if (state.settings.bluetoothControls) {
+        activateBluetoothControls(true);
+      } else {
+        deactivateBluetoothControls(true);
+      }
+    });
+
     el.micBtn.addEventListener('click', toggleListening);
     el.testPlBtn.addEventListener('click', () => speak('To jest test polskiego głosu.', 'pl-PL'));
     el.testEnBtn.addEventListener('click', () => speak('This is a test of the English voice.', 'en-US'));
@@ -320,6 +338,7 @@
     el.autoMic.checked = Boolean(state.settings.autoMic);
     el.autoLanguageSwitch.checked = Boolean(state.settings.autoLanguageSwitch);
     el.keepScreenAwake.checked = Boolean(state.settings.keepScreenAwake);
+    el.bluetoothControls.checked = Boolean(state.settings.bluetoothControls);
   }
 
   function setupPwa() {
@@ -391,6 +410,125 @@
     } finally {
       state.wakeLock = null;
     }
+  }
+
+  function setupMediaSession() {
+    state.mediaSessionSupported = 'mediaSession' in navigator;
+    if (!state.mediaSessionSupported) {
+      state.settings.bluetoothControls = false;
+      saveSettings();
+      if (el.bluetoothControls) {
+        el.bluetoothControls.checked = false;
+        el.bluetoothControls.disabled = true;
+        el.bluetoothControls.title = 'Ta przeglądarka nie obsługuje Media Session API.';
+      }
+      updateHeadsetStatus('Sterowanie słuchawkami niedostępne w tej przeglądarce.');
+      return;
+    }
+
+    registerMediaSessionHandlers();
+    if (state.settings.bluetoothControls) {
+      activateBluetoothControls(false);
+    } else {
+      updateHeadsetStatus('Sterowanie słuchawkami wyłączone.');
+    }
+  }
+
+  function registerMediaSessionHandlers() {
+    if (!('mediaSession' in navigator)) return;
+
+    const handlers = {
+      play: () => runHeadsetAction('check', revealAnswer, 'Słuchawki: Sprawdź.'),
+      pause: () => runHeadsetAction('check', revealAnswer, 'Słuchawki: Sprawdź.'),
+      nexttrack: () => runHeadsetAction('next', nextPair, 'Słuchawki: Następne.'),
+      previoustrack: () => runHeadsetAction('previous', prevPair, 'Słuchawki: Poprzednie.')
+    };
+
+    Object.entries(handlers).forEach(([action, handler]) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (err) {
+        // Nie każda przeglądarka obsługuje komplet akcji multimedialnych.
+      }
+    });
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Angielski Głosowo',
+        artist: 'Sterowanie nauką',
+        album: 'Przyciski słuchawek Bluetooth'
+      });
+    } catch (err) {
+      // Starsze wersje przeglądarek mogą nie mieć konstruktora MediaMetadata.
+    }
+  }
+
+  function activateBluetoothControls(fromUserAction = false) {
+    if (!('mediaSession' in navigator)) {
+      state.settings.bluetoothControls = false;
+      if (el.bluetoothControls) el.bluetoothControls.checked = false;
+      saveSettings();
+      updateHeadsetStatus('Sterowanie słuchawkami niedostępne w tej przeglądarce.');
+      setStatus('Ta przeglądarka nie obsługuje sterowania słuchawkami przez Media Session API.', 'warning');
+      return;
+    }
+
+    registerMediaSessionHandlers();
+    state.headsetControlsActive = true;
+    updateMediaPlaybackState();
+    updateHeadsetStatus('Sterowanie słuchawkami aktywne: Play/Pause = Sprawdź, Next = Następne, Previous = Poprzednie.');
+    if (fromUserAction) {
+      setStatus('Sterowanie słuchawkami Bluetooth aktywne. Play/Pause = Sprawdź, Next = Następne, Previous = Poprzednie.');
+    }
+  }
+
+  function deactivateBluetoothControls(fromUserAction = false) {
+    state.headsetControlsActive = false;
+
+    if ('mediaSession' in navigator) {
+      ['play', 'pause', 'nexttrack', 'previoustrack'].forEach((action) => {
+        try {
+          navigator.mediaSession.setActionHandler(action, null);
+        } catch (err) {
+          // Ignorujemy brak obsługi czyszczenia danej akcji.
+        }
+      });
+      try {
+        navigator.mediaSession.playbackState = 'none';
+      } catch (err) {
+        // Brak obsługi stanu sesji multimedialnej.
+      }
+    }
+
+    updateHeadsetStatus('Sterowanie słuchawkami wyłączone.');
+    if (fromUserAction) setStatus('Sterowanie słuchawkami Bluetooth wyłączone.');
+  }
+
+  function updateMediaPlaybackState() {
+    if (!state.settings.bluetoothControls || !('mediaSession' in navigator)) return;
+    try {
+      navigator.mediaSession.playbackState = state.running ? 'playing' : 'paused';
+    } catch (err) {
+      // Część przeglądarek ignoruje playbackState.
+    }
+  }
+
+  function runHeadsetAction(actionKey, action, statusText) {
+    if (!state.settings.bluetoothControls || !state.headsetControlsActive) return;
+
+    const now = Date.now();
+    const sameActionTooSoon = state.lastMediaActionKey === actionKey && now - state.lastMediaActionTime < 1200;
+    const anyActionTooSoon = now - state.lastMediaActionTime < 350;
+    if (sameActionTooSoon || anyActionTooSoon) return;
+
+    state.lastMediaActionKey = actionKey;
+    state.lastMediaActionTime = now;
+    action();
+    if (statusText) updateHeadsetStatus(`${statusText} Sterowanie słuchawkami aktywne.`);
+  }
+
+  function updateHeadsetStatus(text) {
+    if (el.headsetStatus) el.headsetStatus.textContent = text;
   }
 
   function setupSpeechRecognition() {
@@ -870,6 +1008,8 @@
     if (state.settings.autoLanguageSwitch) setRecognitionLanguage('en-US', true);
     ensureListeningDuringStudy();
     requestWakeLock();
+    if (state.settings.bluetoothControls) activateBluetoothControls(false);
+    updateMediaPlaybackState();
     renderLoadedPairs();
     saveProgress();
     setStatus('Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „test” albo kliknij Sprawdź. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
@@ -882,6 +1022,7 @@
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     safeStopRecognition(false);
     releaseWakeLock();
+    updateMediaPlaybackState();
     el.micBtn.textContent = 'Mikrofon';
     saveProgress();
     setStatus('Zatrzymano naukę.');
