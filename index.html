@@ -72,10 +72,10 @@
       </div>
 
       <div class="quick-actions" aria-label="Główne sterowanie">
-        <button id="checkBtn" class="btn btn-primary">Sprawdź<br><span>test</span></button>
-        <button id="nextBtn" class="btn">Następne<br><span>dalej</span></button>
-        <button id="addReviewBtn" class="btn">Dodaj<br><span>dodaj</span></button>
-        <button id="micBtn" class="btn">Mikrofon</button>
+        <button id="checkBtn" class="btn btn-primary">Sprawdź<br><span>check</span></button>
+        <button id="nextBtn" class="btn">Następne<br><span>next</span></button>
+        <button id="addReviewBtn" class="btn">Dodaj<br><span>add</span></button>
+        <button id="micBtn" class="btn">Mikrofon<br><span>mic</span></button>
       </div>
 
       <div id="status" class="status" role="status">Gotowe.</div>
@@ -97,16 +97,16 @@
         <summary>Dodatkowe przyciski i komendy</summary>
         <div class="button-grid secondary-buttons">
           <button id="startBtn" class="btn btn-primary">Start</button>
-          <button id="captureAnswerBtn" class="btn">Odpowiedź EN</button>
-          <button id="clearAnswerBtn" class="btn">Wyczyść odpowiedź</button>
-          <button id="prevBtn" class="btn">Poprzednie</button>
-          <button id="repeatBtn" class="btn">Powtórz</button>
-          <button id="showReviewBtn" class="btn">Lista powtórek</button>
+          <button id="captureAnswerBtn" class="btn">Odpowiedź EN / answer</button>
+          <button id="clearAnswerBtn" class="btn">Wyczyść / clear</button>
+          <button id="prevBtn" class="btn">Poprzednie / back</button>
+          <button id="repeatBtn" class="btn">Powtórz / repeat</button>
+          <button id="showReviewBtn" class="btn">Lista / list</button>
           <button id="stopBtn" class="btn btn-danger">Stop</button>
         </div>
         <div class="commands-text">
-          <p><strong>Proste komendy:</strong> test, dalej, cofnij, jeszcze, dodaj, lista, mówię, kasuj, start, stop.</p>
-          <p>Działają też starsze komendy: sprawdź, następne, poprzednie, powtórz, dodaj do listy, pokaż listę powtórek. Komendy mogą być rozpoznane bez polskich znaków, np. sprawdz, powtorz.</p>
+          <p><strong>Komendy głosowe po angielsku:</strong> check, next, back, repeat, add, list, answer, clear, start, stop, mic.</p>
+          <p>Komendy zapasowe: test/show = sprawdź, go/forward = następne, previous = poprzednie, again = powtórz, save = dodaj, review = lista. Rozpoznawanie pracuje stale w języku angielskim.</p>
         </div>
       </details>
     </section>
@@ -182,9 +182,10 @@
         <label>
           Język rozpoznawania mowy
           <select id="recognitionLang">
-            <option value="pl-PL">Polski — najlepsze komendy</option>
-            <option value="en-US">Angielski — lepsza transkrypcja odpowiedzi</option>
+            <option value="en-US">English US — komendy i odpowiedzi</option>
+            <option value="en-GB">English UK — komendy i odpowiedzi</option>
           </select>
+          <span class="small-info">Program nie przełącza już języka rozpoznawania. Komendy sterujące są po angielsku.</span>
         </label>
 
         <label>
@@ -202,7 +203,7 @@
           Utrzymuj mikrofon włączony podczas nauki
         </label>
 
-        <label class="checkbox-label">
+        <label class="checkbox-label hidden-setting" style="display:none">
           <input id="autoLanguageSwitch" type="checkbox" />
           Automatycznie przełączaj: odpowiedź EN → komendy PL
         </label>

@@ -15,10 +15,10 @@
     volume: 1,
     voicePl: '',
     voiceEn: '',
-    recognitionLang: 'pl-PL',
+    recognitionLang: 'en-US',
     evaluationMode: 'simple',
     autoMic: true,
-    autoLanguageSwitch: true,
+    autoLanguageSwitch: false,
     keepScreenAwake: true,
     bluetoothControls: false,
     carMode: false,
@@ -292,6 +292,7 @@
     });
     el.recognitionLang.addEventListener('change', () => {
       setRecognitionLanguage(el.recognitionLang.value, true);
+      setStatus(`Język rozpoznawania ustawiony na ${el.recognitionLang.value}. Komendy i odpowiedzi są rozpoznawane po angielsku.`);
     });
 
     el.evaluationMode.addEventListener('change', () => {
@@ -310,13 +311,14 @@
         : 'Automatyczne utrzymywanie mikrofonu podczas nauki jest wyłączone.');
     });
 
-    el.autoLanguageSwitch.addEventListener('change', () => {
-      state.settings.autoLanguageSwitch = el.autoLanguageSwitch.checked;
-      saveSettings();
-      setStatus(state.settings.autoLanguageSwitch
-        ? 'Automatyczne przełączanie języka jest włączone.'
-        : 'Automatyczne przełączanie języka jest wyłączone. Użyj ręcznie pola „Język rozpoznawania mowy”.');
-    });
+    if (el.autoLanguageSwitch) {
+      el.autoLanguageSwitch.addEventListener('change', () => {
+        state.settings.autoLanguageSwitch = false;
+        el.autoLanguageSwitch.checked = false;
+        saveSettings();
+        setStatus('Przełączanie języka jest wyłączone. Program nasłuchuje tylko języka angielskiego.');
+      });
+    }
 
     el.keepScreenAwake.addEventListener('change', async () => {
       state.settings.keepScreenAwake = el.keepScreenAwake.checked;
@@ -429,6 +431,7 @@
       state.reviewItems = normalizeStoredReview(storedReview, legacyReview);
       state.settings = { ...DEFAULT_SETTINGS, ...storedSettings };
       state.settings.pilotCustomBindings = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
+      forceEnglishOnlyRecognitionSettings();
       if (storedSettings.rate && !storedSettings.ratePl) state.settings.ratePl = Number(storedSettings.rate) || DEFAULT_SETTINGS.ratePl;
       if (storedSettings.rate && !storedSettings.rateEn) state.settings.rateEn = Number(storedSettings.rate) || DEFAULT_SETTINGS.rateEn;
       if (typeof storedSettings.evaluateAnswer === 'boolean' && !storedSettings.evaluationMode) {
@@ -442,7 +445,16 @@
       state.reviewItems = [];
       state.settings = { ...DEFAULT_SETTINGS };
       state.settings.pilotCustomBindings = {};
+      forceEnglishOnlyRecognitionSettings();
     }
+  }
+
+
+  function forceEnglishOnlyRecognitionSettings() {
+    if (!['en-US', 'en-GB'].includes(state.settings.recognitionLang)) {
+      state.settings.recognitionLang = 'en-US';
+    }
+    state.settings.autoLanguageSwitch = false;
   }
 
   function normalizeStoredReview(storedReview, legacyReview) {
@@ -495,6 +507,7 @@
 
   function saveSettings() {
     state.settings.pilotCustomBindings = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
+    forceEnglishOnlyRecognitionSettings();
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
   }
 
@@ -506,11 +519,12 @@
     el.volumeInput.value = String(state.settings.volume);
     el.volumeValue.textContent = Number(state.settings.volume).toFixed(1);
     el.studyMode.value = state.mode;
+    forceEnglishOnlyRecognitionSettings();
     el.recognitionLang.value = state.settings.recognitionLang;
     if (!['none', 'simple', 'medium', 'advanced'].includes(state.settings.evaluationMode)) state.settings.evaluationMode = 'simple';
     el.evaluationMode.value = state.settings.evaluationMode || 'simple';
     el.autoMic.checked = Boolean(state.settings.autoMic);
-    el.autoLanguageSwitch.checked = Boolean(state.settings.autoLanguageSwitch);
+    if (el.autoLanguageSwitch) el.autoLanguageSwitch.checked = false;
     el.keepScreenAwake.checked = Boolean(state.settings.keepScreenAwake);
     el.bluetoothControls.checked = Boolean(state.settings.bluetoothControls);
     el.carMode.checked = Boolean(state.settings.carMode);
@@ -1351,26 +1365,17 @@
   }
 
   function prepareForEnglishAnswer(forceStart = false) {
-    const pair = getCurrentPair();
-    if (!pair) {
-      setStatus('Brak aktualnej pary do nagrania odpowiedzi.', 'warning');
-      return;
-    }
-
-    state.revealed = false;
+    resetCurrentAnswer();
     state.currentFeedback = null;
-    renderLearning();
-
-    if (state.settings.autoLanguageSwitch) {
-      setRecognitionLanguage('en-US', true);
+    renderEvaluationState();
+    if (state.recognition) {
+      setRecognitionLanguage(state.settings.recognitionLang || 'en-US', false);
     }
-
-    if (forceStart && !state.listening) {
+    if (forceStart) {
       state.listening = true;
       safeStartRecognition();
     }
-
-    setStatus('Tryb odpowiedzi angielskiej. Powiedz odpowiedź po angielsku. Po rozpoznaniu aplikacja wróci do komend po polsku.');
+    setStatus('Tryb odpowiedzi angielskiej. Powiedz odpowiedź po angielsku albo użyj komendy: check, next, back, repeat, add, list, start, stop, clear, mic.');
   }
 
   function clearCurrentAnswer() {
@@ -1417,9 +1422,7 @@
     }
 
     const command = detectCommand(text);
-    const commandLanguage = String(state.settings.recognitionLang || '').toLowerCase().startsWith('pl');
-    const commandAllowed = commandLanguage || ['start', 'stop', 'captureAnswer', 'clearAnswer'].includes(command);
-    if (command && finalText && commandAllowed) {
+    if (command && finalText) {
       runCommand(command);
       return;
     }
@@ -1429,11 +1432,7 @@
       el.recognizedText.textContent = state.recognizedAnswer || '—';
       state.currentFeedback = null;
       renderEvaluationState();
-
-      if (state.settings.autoLanguageSwitch && state.running) {
-        setRecognitionLanguage('pl-PL', true);
-        setStatus('Odpowiedź zapisana. Powiedz „test” albo kliknij przycisk Sprawdź.');
-      }
+      setStatus('Odpowiedź zapisana. Powiedz „check” albo kliknij Sprawdź/check.');
       return;
     }
 
@@ -1462,23 +1461,24 @@
   }
 
   const VOICE_COMMANDS = {
-    check: ['test', 'sprawdz', 'sprawdzam', 'check'],
-    next: ['dalej', 'nastepne', 'nastepny', 'next'],
-    prev: ['cofnij', 'wstecz', 'poprzednie', 'poprzedni', 'back', 'previous'],
-    repeat: ['jeszcze', 'powtorz', 'powtor', 'repeat'],
-    addReview: ['dodaj', 'dodaj do listy', 'dodaj do powtorek', 'add'],
-    showReview: ['lista', 'lista powtorek', 'pokaz liste', 'pokaz liste powtorek', 'review list'],
-    captureAnswer: ['mowie', 'angielski', 'odpowiedz', 'answer'],
-    clearAnswer: ['kasuj', 'wyczysc', 'clear'],
-    start: ['start', 'rozpocznij'],
-    stop: ['stop', 'zatrzymaj']
+    check: ['check', 'test', 'show', 'show answer', 'answer check'],
+    next: ['next', 'go', 'go next', 'forward', 'go forward', 'next one'],
+    prev: ['back', 'previous', 'go back', 'back one'],
+    repeat: ['repeat', 'again', 'say again', 'one more'],
+    addReview: ['add', 'save', 'add review', 'save review'],
+    showReview: ['list', 'review', 'show list', 'review list'],
+    captureAnswer: ['answer', 'my answer', 'speak', 'talk'],
+    clearAnswer: ['clear', 'delete', 'clear answer', 'delete answer'],
+    start: ['start', 'begin'],
+    stop: ['stop', 'pause'],
+    mic: ['mic', 'microphone']
   };
 
   function detectCommand(text) {
     const t = normalizeCommand(text);
     if (!t) return null;
 
-    const commandText = t.startsWith('komenda ') ? t.slice(8).trim() : t;
+    const commandText = t.startsWith('command ') ? t.slice(8).trim() : t;
     for (const [command, aliases] of Object.entries(VOICE_COMMANDS)) {
       if (aliases.some((alias) => commandMatches(commandText, alias))) return command;
     }
@@ -1488,13 +1488,18 @@
   function commandMatches(text, alias) {
     if (text === alias) return true;
 
-    const words = text.split(' ').filter(Boolean);
-    const aliasWords = alias.split(' ').filter(Boolean);
-    if (words.length > aliasWords.length + 1) return false;
+    const safeAlias = normalizeCommand(alias);
+    if (text === safeAlias) return true;
 
-    return text === `no ${alias}`
-      || text === `${alias} prosze`
-      || text === `${alias} teraz`;
+    const words = text.split(' ').filter(Boolean);
+    const aliasWords = safeAlias.split(' ').filter(Boolean);
+    if (words.length > aliasWords.length + 2) return false;
+
+    return text === `please ${safeAlias}`
+      || text === `${safeAlias} please`
+      || text === `now ${safeAlias}`
+      || text === `${safeAlias} now`
+      || text === `command ${safeAlias}`;
   }
 
   function runCommand(command) {
@@ -1508,7 +1513,8 @@
       captureAnswer: () => prepareForEnglishAnswer(true),
       clearAnswer: clearCurrentAnswer,
       addReview: addCurrentToReview,
-      showReview: scrollToReview
+      showReview: scrollToReview,
+      mic: toggleListening
     };
     if (actions[command]) actions[command]();
   }
@@ -1699,7 +1705,7 @@
     saveProgress();
 
     const pair = getCurrentPair();
-    setStatus(`Start od numeru ${pair.nr}. Podaj odpowiedź po angielsku, a potem powiedz „test”.`);
+    setStatus(`Start od numeru ${pair.nr}. Podaj odpowiedź po angielsku, a potem powiedz „check”.`);
     if (pair) speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
@@ -1735,7 +1741,7 @@
     saveProgress();
     setStatus(state.settings.carMode
       ? 'Start w trybie samochodowym. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
-      : 'Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „test” albo kliknij Sprawdź. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
+      : 'Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „check” albo kliknij Sprawdź/check. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
     speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
@@ -1767,7 +1773,7 @@
     renderLearning();
 
     const feedbackText = state.currentFeedback ? state.currentFeedback.spokenComment : '';
-    setStatus('Sprawdź swoją odpowiedź. Program czeka na „następne” lub inną komendę.');
+    setStatus('Sprawdź swoją odpowiedź. Program czeka na „next” lub inną angielską komendę.');
     speakMany([
       { text: pair.en, lang: 'en-US' },
       { text: feedbackText, lang: 'pl-PL' }
@@ -1796,7 +1802,7 @@
     ensureListeningDuringStudy();
     setStatus(state.settings.carMode
       ? 'Kolejna para. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
-      : 'Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
+      : 'Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „check”.');
     speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
@@ -1822,7 +1828,7 @@
     ensureListeningDuringStudy();
     setStatus(state.settings.carMode
       ? 'Poprzednia para. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
-      : 'Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „test”.');
+      : 'Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „check”.');
     speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
