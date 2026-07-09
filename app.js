@@ -25,6 +25,8 @@
     carAnswerDelay: 8,
     carAfterCheckDelay: 4,
     keyboardControls: false,
+    pilotControls: false,
+    pilotCustomBindings: {},
     shortcutCheck: 'Enter',
     shortcutNext: 'ArrowRight',
     shortcutPrev: 'ArrowLeft',
@@ -32,6 +34,50 @@
     shortcutRepeat: 'r',
     shortcutMic: 'm',
     shortcutStartStop: 's'
+  };
+
+
+
+  const PILOT_ACTION_LABELS = {
+    check: 'Sprawdź',
+    next: 'Następne',
+    prev: 'Poprzednie',
+    repeat: 'Powtórz',
+    addReview: 'Dodaj do powtórek',
+    startStop: 'Start / Stop',
+    mic: 'Mikrofon'
+  };
+
+  const PILOT_DEFAULT_BINDINGS = {
+    check: [
+      { type: 'key', value: 'Enter' },
+      { type: 'key', value: 'Space' },
+      { type: 'media', value: 'play' },
+      { type: 'media', value: 'pause' }
+    ],
+    next: [
+      { type: 'key', value: 'ArrowRight' },
+      { type: 'media', value: 'nexttrack' }
+    ],
+    prev: [
+      { type: 'key', value: 'ArrowLeft' },
+      { type: 'media', value: 'previoustrack' }
+    ],
+    repeat: [
+      { type: 'key', value: 'ArrowUp' },
+      { type: 'media', value: 'seekbackward' }
+    ],
+    addReview: [
+      { type: 'key', value: 'ArrowDown' },
+      { type: 'media', value: 'seekforward' }
+    ],
+    startStop: [
+      { type: 'key', value: 's' },
+      { type: 'media', value: 'stop' }
+    ],
+    mic: [
+      { type: 'key', value: 'm' }
+    ]
   };
 
   const state = {
@@ -61,6 +107,10 @@
     carCountdownTotalMs: 0,
     lastKeyboardActionKey: '',
     lastKeyboardActionTime: 0,
+    lastPilotActionKey: '',
+    lastPilotActionTime: 0,
+    pilotAssignAction: '',
+    lastPilotEvent: null,
     restartRecognitionAfterSpeech: false,
     changingRecognitionLanguage: false,
     recognitionRestartTimer: null,
@@ -139,6 +189,17 @@
     shortcutMic: document.getElementById('shortcutMic'),
     shortcutStartStop: document.getElementById('shortcutStartStop'),
     keyboardStatus: document.getElementById('keyboardStatus'),
+    pilotControls: document.getElementById('pilotControls'),
+    pilotStatus: document.getElementById('pilotStatus'),
+    pilotTestStatus: document.getElementById('pilotTestStatus'),
+    pilotAssignCheck: document.getElementById('pilotAssignCheck'),
+    pilotAssignNext: document.getElementById('pilotAssignNext'),
+    pilotAssignPrev: document.getElementById('pilotAssignPrev'),
+    pilotAssignRepeat: document.getElementById('pilotAssignRepeat'),
+    pilotAssignAdd: document.getElementById('pilotAssignAdd'),
+    pilotAssignStartStop: document.getElementById('pilotAssignStartStop'),
+    pilotAssignMic: document.getElementById('pilotAssignMic'),
+    resetPilotMappingsBtn: document.getElementById('resetPilotMappingsBtn'),
     headsetStatus: document.getElementById('headsetStatus'),
     micBtn: document.getElementById('micBtn'),
     testPlBtn: document.getElementById('testPlBtn'),
@@ -162,6 +223,7 @@
     setupWakeLock();
     setupMediaSession();
     setupKeyboardControls();
+    setupPilotControls();
     loadVoices();
     applySettingsToUi();
     renderAll();
@@ -328,6 +390,28 @@
     bindShortcutInput(el.shortcutMic, 'shortcutMic');
     bindShortcutInput(el.shortcutStartStop, 'shortcutStartStop');
 
+    if (el.pilotControls) {
+      el.pilotControls.addEventListener('change', () => {
+        state.settings.pilotControls = el.pilotControls.checked;
+        saveSettings();
+        registerMediaSessionHandlers();
+        updatePilotStatus(state.settings.pilotControls
+          ? 'Pilot Bluetooth aktywny. Naciśnij przycisk pilota, aby sprawdzić zdarzenie.'
+          : 'Pilot Bluetooth wyłączony.');
+        setStatus(state.settings.pilotControls
+          ? 'Sterowanie pilotem Bluetooth / pierścieniem jest włączone.'
+          : 'Sterowanie pilotem Bluetooth / pierścieniem jest wyłączone.');
+      });
+    }
+
+    document.querySelectorAll('[data-pilot-action]').forEach((button) => {
+      button.addEventListener('click', () => startPilotAssignment(button.dataset.pilotAction));
+    });
+
+    if (el.resetPilotMappingsBtn) {
+      el.resetPilotMappingsBtn.addEventListener('click', resetPilotMappings);
+    }
+
     el.micBtn.addEventListener('click', toggleListening);
     el.testPlBtn.addEventListener('click', () => speak('To jest test polskiego głosu.', 'pl-PL'));
     el.testEnBtn.addEventListener('click', () => speak('This is a test of the English voice.', 'en-US'));
@@ -344,6 +428,7 @@
       state.pairs = Array.isArray(storedPairs) ? storedPairs.filter(isValidPair) : [];
       state.reviewItems = normalizeStoredReview(storedReview, legacyReview);
       state.settings = { ...DEFAULT_SETTINGS, ...storedSettings };
+      state.settings.pilotCustomBindings = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
       if (storedSettings.rate && !storedSettings.ratePl) state.settings.ratePl = Number(storedSettings.rate) || DEFAULT_SETTINGS.ratePl;
       if (storedSettings.rate && !storedSettings.rateEn) state.settings.rateEn = Number(storedSettings.rate) || DEFAULT_SETTINGS.rateEn;
       if (typeof storedSettings.evaluateAnswer === 'boolean' && !storedSettings.evaluationMode) {
@@ -356,6 +441,7 @@
       state.pairs = [];
       state.reviewItems = [];
       state.settings = { ...DEFAULT_SETTINGS };
+      state.settings.pilotCustomBindings = {};
     }
   }
 
@@ -408,6 +494,7 @@
   }
 
   function saveSettings() {
+    state.settings.pilotCustomBindings = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
     localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
   }
 
@@ -430,9 +517,12 @@
     el.carAnswerDelay.value = String(clampNumber(state.settings.carAnswerDelay, 2, 60, DEFAULT_SETTINGS.carAnswerDelay));
     el.carAfterCheckDelay.value = String(clampNumber(state.settings.carAfterCheckDelay, 1, 30, DEFAULT_SETTINGS.carAfterCheckDelay));
     el.keyboardControls.checked = Boolean(state.settings.keyboardControls);
+    if (el.pilotControls) el.pilotControls.checked = Boolean(state.settings.pilotControls);
     renderShortcutInputs();
+    renderPilotMappings();
     updateCarModeStatus();
     updateKeyboardStatus();
+    updatePilotStatus();
   }
 
   function setupPwa() {
@@ -517,6 +607,7 @@
         el.bluetoothControls.title = 'Ta przeglądarka nie obsługuje Media Session API.';
       }
       updateHeadsetStatus('Sterowanie słuchawkami niedostępne w tej przeglądarce.');
+      updatePilotStatus();
       return;
     }
 
@@ -526,16 +617,20 @@
     } else {
       updateHeadsetStatus('Sterowanie słuchawkami wyłączone.');
     }
+    updatePilotStatus();
   }
 
   function registerMediaSessionHandlers() {
     if (!('mediaSession' in navigator)) return;
 
     const handlers = {
-      play: () => runHeadsetAction('check', revealAnswer, 'Słuchawki: Sprawdź.'),
-      pause: () => runHeadsetAction('check', revealAnswer, 'Słuchawki: Sprawdź.'),
-      nexttrack: () => runHeadsetAction('next', nextPair, 'Słuchawki: Następne.'),
-      previoustrack: () => runHeadsetAction('previous', prevPair, 'Słuchawki: Poprzednie.')
+      play: () => handleMediaSessionAction('play'),
+      pause: () => handleMediaSessionAction('pause'),
+      nexttrack: () => handleMediaSessionAction('nexttrack'),
+      previoustrack: () => handleMediaSessionAction('previoustrack'),
+      seekbackward: () => handleMediaSessionAction('seekbackward'),
+      seekforward: () => handleMediaSessionAction('seekforward'),
+      stop: () => handleMediaSessionAction('stop')
     };
 
     Object.entries(handlers).forEach(([action, handler]) => {
@@ -580,7 +675,7 @@
     state.headsetControlsActive = false;
 
     if ('mediaSession' in navigator) {
-      ['play', 'pause', 'nexttrack', 'previoustrack'].forEach((action) => {
+      ['play', 'pause', 'nexttrack', 'previoustrack', 'seekbackward', 'seekforward', 'stop'].forEach((action) => {
         try {
           navigator.mediaSession.setActionHandler(action, null);
         } catch (err) {
@@ -594,12 +689,14 @@
       }
     }
 
+    if (state.settings.pilotControls) registerMediaSessionHandlers();
     updateHeadsetStatus('Sterowanie słuchawkami wyłączone.');
+    updateMediaPlaybackState();
     if (fromUserAction) setStatus('Sterowanie słuchawkami Bluetooth wyłączone.');
   }
 
   function updateMediaPlaybackState() {
-    if (!state.settings.bluetoothControls || !('mediaSession' in navigator)) return;
+    if ((!state.settings.bluetoothControls && !state.settings.pilotControls) || !('mediaSession' in navigator)) return;
     try {
       navigator.mediaSession.playbackState = state.running ? 'playing' : 'paused';
     } catch (err) {
@@ -623,6 +720,217 @@
 
   function updateHeadsetStatus(text) {
     if (el.headsetStatus) el.headsetStatus.textContent = text;
+  }
+
+  function setupPilotControls() {
+    document.addEventListener('keydown', handlePilotKeyDown, true);
+    renderPilotMappings();
+    updatePilotStatus();
+  }
+
+  function handlePilotKeyDown(event) {
+    const key = normalizeKeyboardKey(event.key);
+    if (!key) return;
+
+    const binding = { type: 'key', value: key };
+    const shouldObserve = state.settings.pilotControls || state.pilotAssignAction;
+    if (shouldObserve) updatePilotDetectedEvent(binding, event);
+
+    if (state.pilotAssignAction) {
+      event.preventDefault();
+      event.stopPropagation();
+      completePilotAssignment(binding);
+      return;
+    }
+
+    if (!state.settings.pilotControls) return;
+    if (isEditableElement(event.target)) return;
+
+    const action = getPilotActionForBinding(binding);
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    runPilotAction(action, binding);
+  }
+
+  function handleMediaSessionAction(mediaAction) {
+    const binding = { type: 'media', value: mediaAction };
+    updatePilotDetectedEvent(binding);
+
+    if (state.pilotAssignAction) {
+      completePilotAssignment(binding);
+      return;
+    }
+
+    if (state.settings.pilotControls) {
+      const action = getPilotActionForBinding(binding);
+      if (action) {
+        runPilotAction(action, binding);
+        return;
+      }
+    }
+
+    const fallback = {
+      play: 'check',
+      pause: 'check',
+      nexttrack: 'next',
+      previoustrack: 'prev',
+      seekbackward: 'repeat',
+      seekforward: 'addReview',
+      stop: 'startStop'
+    }[mediaAction];
+    if (fallback && state.settings.bluetoothControls && state.headsetControlsActive) {
+      runHeadsetAction(fallback, () => runAppAction(fallback), `Słuchawki: ${PILOT_ACTION_LABELS[fallback] || fallback}.`);
+    }
+  }
+
+  function startPilotAssignment(action) {
+    if (!PILOT_ACTION_LABELS[action]) return;
+    state.pilotAssignAction = action;
+    updatePilotStatus(`Oczekiwanie na przycisk pilota dla funkcji: ${PILOT_ACTION_LABELS[action]}. Naciśnij przycisk pierścienia.`);
+    setStatus(`Tryb przypisywania: naciśnij przycisk pilota dla funkcji „${PILOT_ACTION_LABELS[action]}”.`);
+    if (el.pilotTestStatus) {
+      el.pilotTestStatus.textContent = `Oczekiwanie na zdarzenie: ${PILOT_ACTION_LABELS[action]}.`;
+    }
+  }
+
+  function completePilotAssignment(binding) {
+    const action = state.pilotAssignAction;
+    if (!action) return;
+    state.settings.pilotCustomBindings = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
+    state.settings.pilotCustomBindings[action] = binding;
+    state.pilotAssignAction = '';
+    saveSettings();
+    renderPilotMappings();
+    updatePilotStatus(`Przypisano ${formatPilotBinding(binding)} do funkcji ${PILOT_ACTION_LABELS[action]}.`);
+    setStatus(`Przypisano przycisk pilota: ${formatPilotBinding(binding)} → ${PILOT_ACTION_LABELS[action]}.`);
+  }
+
+  function resetPilotMappings() {
+    state.settings.pilotCustomBindings = {};
+    state.pilotAssignAction = '';
+    saveSettings();
+    renderPilotMappings();
+    updatePilotStatus('Wyczyszczono własne przypisania pilota. Aktywne są mapowania domyślne.');
+    setStatus('Wyczyszczono przypisania pilota Bluetooth / pierścienia.');
+  }
+
+  function updatePilotDetectedEvent(binding, event = null) {
+    state.lastPilotEvent = {
+      ...binding,
+      code: event ? event.code : '',
+      time: new Date().toLocaleTimeString()
+    };
+    const action = getPilotActionForBinding(binding);
+    const canAssign = binding.type === 'key' || binding.type === 'media';
+    if (!el.pilotTestStatus) return;
+    const typeLabel = binding.type === 'media' ? 'zdarzenie multimedialne' : 'klawisz HID / keydown';
+    const codeText = event && event.code ? `, code: ${event.code}` : '';
+    const actionText = action ? `Funkcja: ${PILOT_ACTION_LABELS[action]}.` : 'Brak przypisanej funkcji.';
+    const assignText = canAssign ? 'Można przypisać do funkcji programu.' : 'Nie można przypisać tego zdarzenia.';
+    el.pilotTestStatus.textContent = `Wykryto ${typeLabel}: ${formatPilotBinding(binding)}${codeText}. ${actionText} ${assignText}`;
+  }
+
+  function getPilotActionForBinding(binding) {
+    const normalized = normalizePilotBinding(binding);
+    if (!normalized) return '';
+
+    const custom = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
+    for (const [action, customBinding] of Object.entries(custom)) {
+      if (pilotBindingEquals(customBinding, normalized)) return action;
+    }
+
+    for (const [action, bindings] of Object.entries(PILOT_DEFAULT_BINDINGS)) {
+      if (bindings.some((candidate) => pilotBindingEquals(candidate, normalized))) return action;
+    }
+
+    return '';
+  }
+
+  function runPilotAction(action, binding) {
+    const now = Date.now();
+    const key = `${action}:${binding.type}:${binding.value}`;
+    const sameActionTooSoon = state.lastPilotActionKey === key && now - state.lastPilotActionTime < 800;
+    const anyActionTooSoon = now - state.lastPilotActionTime < 150;
+    if (sameActionTooSoon || anyActionTooSoon) return;
+
+    state.lastPilotActionKey = key;
+    state.lastPilotActionTime = now;
+    runAppAction(action);
+    updatePilotStatus(`Pilot: ${PILOT_ACTION_LABELS[action]} (${formatPilotBinding(binding)}).`);
+  }
+
+  function runAppAction(action) {
+    const actions = {
+      check: revealAnswer,
+      next: nextPair,
+      prev: prevPair,
+      addReview: addCurrentToReview,
+      repeat: repeatCurrent,
+      mic: toggleListening,
+      startStop: () => state.running ? stopStudy() : startStudy()
+    };
+    if (actions[action]) actions[action]();
+  }
+
+  function normalizePilotBinding(binding) {
+    if (!binding || !binding.type || !binding.value) return null;
+    const type = binding.type === 'media' ? 'media' : 'key';
+    const value = type === 'key' ? normalizeKeyboardKey(binding.value) : String(binding.value).toLowerCase();
+    if (!value) return null;
+    return { type, value };
+  }
+
+  function pilotBindingEquals(a, b) {
+    const left = normalizePilotBinding(a);
+    const right = normalizePilotBinding(b);
+    return Boolean(left && right && left.type === right.type && left.value === right.value);
+  }
+
+  function normalizePilotCustomBindings(bindings) {
+    const output = {};
+    if (!bindings || typeof bindings !== 'object') return output;
+    Object.entries(bindings).forEach(([action, binding]) => {
+      if (!PILOT_ACTION_LABELS[action]) return;
+      const normalized = normalizePilotBinding(binding);
+      if (normalized) output[action] = normalized;
+    });
+    return output;
+  }
+
+  function formatPilotBinding(binding) {
+    const normalized = normalizePilotBinding(binding);
+    if (!normalized) return '—';
+    if (normalized.type === 'media') return `Media:${normalized.value}`;
+    return `Key:${formatShortcutKey(normalized.value)}`;
+  }
+
+  function renderPilotMappings() {
+    const map = {
+      check: el.pilotAssignCheck,
+      next: el.pilotAssignNext,
+      prev: el.pilotAssignPrev,
+      repeat: el.pilotAssignRepeat,
+      addReview: el.pilotAssignAdd,
+      startStop: el.pilotAssignStartStop,
+      mic: el.pilotAssignMic
+    };
+    const custom = normalizePilotCustomBindings(state.settings.pilotCustomBindings);
+    Object.entries(map).forEach(([action, node]) => {
+      if (!node) return;
+      const defaultText = (PILOT_DEFAULT_BINDINGS[action] || []).map(formatPilotBinding).join(', ');
+      node.textContent = custom[action] ? `${formatPilotBinding(custom[action])} (własne)` : defaultText || 'brak';
+      node.title = custom[action]
+        ? `Własne przypisanie. Domyślne: ${defaultText}`
+        : `Mapowania domyślne: ${defaultText}`;
+    });
+  }
+
+  function updatePilotStatus(text = '') {
+    if (!el.pilotStatus) return;
+    const media = 'mediaSession' in navigator ? 'Media Session dostępne' : 'Media Session niedostępne';
+    const status = state.settings.pilotControls ? 'Pilot Bluetooth aktywny.' : 'Pilot Bluetooth wyłączony.';
+    el.pilotStatus.textContent = text || `${status} ${media}. Test wykrywa zdarzenia keydown oraz zdarzenia multimedialne, jeżeli przeglądarka je przekaże.`;
   }
 
 

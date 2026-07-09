@@ -255,7 +255,68 @@
         <div id="keyboardStatus" class="small-info">Sterowanie klawiaturą/pilotem wyłączone. Kliknij pole skrótu i naciśnij wybrany klawisz, aby go przypisać.</div>
       </details>
 
-      <div id="headsetStatus" class="small-info headset-status">Sterowanie słuchawkami wyłączone.</div>
+
+
+      <details class="settings-details pilot-settings">
+        <summary>Sterowanie pilotem Bluetooth / pierścieniem</summary>
+        <div class="settings-grid nested-settings">
+          <label class="checkbox-label">
+            <input id="pilotControls" type="checkbox" />
+            Sterowanie pilotem Bluetooth / pierścieniem
+          </label>
+          <div class="pilot-test-box">
+            <strong>Test pilota Bluetooth</strong>
+            <p class="hint">Włącz opcję powyżej, sparuj pilota z telefonem, ustaw fokus na aplikacji i naciśnij dowolny przycisk pilota. Jeśli pilot działa jako klawiatura HID albo wysyła zdarzenia multimedialne, aplikacja pokaże wykryty kod.</p>
+            <div id="pilotStatus" class="small-info">Pilot Bluetooth wyłączony.</div>
+            <div id="pilotTestStatus" class="pilot-event-box">Nie wykryto jeszcze zdarzenia pilota.</div>
+          </div>
+
+          <div class="pilot-mapping-grid" aria-label="Przypisywanie przycisków pilota">
+            <div class="pilot-map-row">
+              <span>Sprawdź</span>
+              <code id="pilotAssignCheck">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="check">Przypisz</button>
+            </div>
+            <div class="pilot-map-row">
+              <span>Następne</span>
+              <code id="pilotAssignNext">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="next">Przypisz</button>
+            </div>
+            <div class="pilot-map-row">
+              <span>Poprzednie</span>
+              <code id="pilotAssignPrev">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="prev">Przypisz</button>
+            </div>
+            <div class="pilot-map-row">
+              <span>Powtórz</span>
+              <code id="pilotAssignRepeat">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="repeat">Przypisz</button>
+            </div>
+            <div class="pilot-map-row">
+              <span>Dodaj</span>
+              <code id="pilotAssignAdd">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="addReview">Przypisz</button>
+            </div>
+            <div class="pilot-map-row">
+              <span>Start / Stop</span>
+              <code id="pilotAssignStartStop">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="startStop">Przypisz</button>
+            </div>
+            <div class="pilot-map-row">
+              <span>Mikrofon</span>
+              <code id="pilotAssignMic">domyślne</code>
+              <button class="btn compact-btn pilot-assign-btn" type="button" data-pilot-action="mic">Przypisz</button>
+            </div>
+          </div>
+
+          <div class="button-row compact">
+            <button id="resetPilotMappingsBtn" class="btn btn-danger" type="button">Wyczyść przypisania pilota</button>
+          </div>
+          <p class="hint">Domyślnie: Enter/Space = Sprawdź, → = Następne, ← = Poprzednie, ↑ = Powtórz, ↓ = Dodaj, S = Start/Stop, M = Mikrofon. Dla zdarzeń multimedialnych: Play/Pause = Sprawdź, Next Track = Następne, Previous Track = Poprzednie.</p>
+        </div>
+      </details>
+
+            <div id="headsetStatus" class="small-info headset-status">Sterowanie słuchawkami wyłączone.</div>
 
       <div class="button-row">
         <button id="testPlBtn" class="btn">Test PL</button>

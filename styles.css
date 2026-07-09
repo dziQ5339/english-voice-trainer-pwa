@@ -909,3 +909,78 @@ button:focus-visible {
     font-size: 1.25rem;
   }
 }
+
+/* v11: test i przypisywanie przycisków pilota Bluetooth / pierścienia */
+.pilot-settings .hint {
+  margin: 6px 0 10px;
+}
+
+.pilot-test-box {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.pilot-event-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--primary);
+  background: #eef3f8;
+  font-weight: 800;
+}
+
+.pilot-mapping-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.pilot-map-row {
+  display: grid;
+  grid-template-columns: minmax(95px, 1fr) minmax(130px, 1.5fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.pilot-map-row span {
+  font-weight: 900;
+}
+
+.pilot-map-row code {
+  display: inline-block;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background: #f0f4f8;
+  color: var(--primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9rem;
+  white-space: normal;
+}
+
+.pilot-assign-btn {
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+#pilotStatus {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fbff;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 520px) {
+  .pilot-map-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pilot-map-row code,
+  .pilot-assign-btn {
+    width: 100%;
+  }
+}
