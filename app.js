@@ -16,7 +16,7 @@
     voicePl: '',
     voiceEn: '',
     recognitionLang: 'en-US',
-    evaluationMode: 'simple',
+    evaluationMode: 'none',
     autoMic: true,
     autoLanguageSwitch: false,
     keepScreenAwake: true,
@@ -292,15 +292,17 @@
     });
     el.recognitionLang.addEventListener('change', () => {
       setRecognitionLanguage(el.recognitionLang.value, true);
-      setStatus(`Język rozpoznawania ustawiony na ${el.recognitionLang.value}. Komendy i odpowiedzi są rozpoznawane po angielsku.`);
+      setStatus(`Język rozpoznawania ustawiony na ${el.recognitionLang.value}. Nasłuchiwane są tylko komendy sterujące po angielsku.`);
     });
 
     el.evaluationMode.addEventListener('change', () => {
-      state.settings.evaluationMode = el.evaluationMode.value;
+      // Wersja v13: ocena odpowiedzi jest celowo wyłączona. Rozpoznawanie mowy służy tylko do komend.
+      state.settings.evaluationMode = 'none';
+      el.evaluationMode.value = 'none';
       state.currentFeedback = null;
       saveSettings();
       renderEvaluationState();
-      setStatus(`Tryb oceny: ${getEvaluationModeLabel(state.settings.evaluationMode)}.`);
+      setStatus('Ocena wypowiedzi jest wyłączona. Mikrofon rozpoznaje tylko komendy po angielsku.');
     });
 
     el.autoMic.addEventListener('change', () => {
@@ -435,7 +437,7 @@
       if (storedSettings.rate && !storedSettings.ratePl) state.settings.ratePl = Number(storedSettings.rate) || DEFAULT_SETTINGS.ratePl;
       if (storedSettings.rate && !storedSettings.rateEn) state.settings.rateEn = Number(storedSettings.rate) || DEFAULT_SETTINGS.rateEn;
       if (typeof storedSettings.evaluateAnswer === 'boolean' && !storedSettings.evaluationMode) {
-        state.settings.evaluationMode = storedSettings.evaluateAnswer ? 'simple' : 'simple';
+        state.settings.evaluationMode = 'none';
       }
       restoreProgress(storedProgress);
       saveReview();
@@ -455,6 +457,8 @@
       state.settings.recognitionLang = 'en-US';
     }
     state.settings.autoLanguageSwitch = false;
+    // v13: brak oceny wypowiedzi; rozpoznawanie mowy obsługuje wyłącznie komendy.
+    state.settings.evaluationMode = 'none';
   }
 
   function normalizeStoredReview(storedReview, legacyReview) {
@@ -521,8 +525,8 @@
     el.studyMode.value = state.mode;
     forceEnglishOnlyRecognitionSettings();
     el.recognitionLang.value = state.settings.recognitionLang;
-    if (!['none', 'simple', 'medium', 'advanced'].includes(state.settings.evaluationMode)) state.settings.evaluationMode = 'simple';
-    el.evaluationMode.value = state.settings.evaluationMode || 'simple';
+    state.settings.evaluationMode = 'none';
+    el.evaluationMode.value = 'none';
     el.autoMic.checked = Boolean(state.settings.autoMic);
     if (el.autoLanguageSwitch) el.autoLanguageSwitch.checked = false;
     el.keepScreenAwake.checked = Boolean(state.settings.keepScreenAwake);
@@ -1251,14 +1255,14 @@
     recognition.onstart = () => {
       state.listening = true;
       el.micBtn.textContent = 'Mikrofon ON';
-      el.speechInfo.textContent = `Mikrofon aktywny. Język: ${recognition.lang}.`;
+      el.speechInfo.textContent = `Mikrofon aktywny. Język: ${recognition.lang}. Nasłuchiwane są tylko komendy sterujące.`;
     };
 
     recognition.onerror = (event) => {
       // `no-speech` oznacza, że mikrofon działa, ale w krótkim czasie nie wykryto mowy.
       // W trybie nauki nie wyłączamy wtedy mikrofonu — pozwalamy funkcji onend wznowić nasłuch.
       if (event.error === 'no-speech') {
-        setStatus('Nie wykryto mowy. Mikrofon nadal nasłuchuje — powiedz komendę wyraźnie albo użyj przycisku.', 'warning');
+        setStatus('Nie wykryto komendy. Mikrofon nadal nasłuchuje — powiedz krótką komendę po angielsku albo użyj przycisku.', 'warning');
         return;
       }
 
@@ -1365,29 +1369,25 @@
   }
 
   function prepareForEnglishAnswer(forceStart = false) {
-    resetCurrentAnswer();
-    state.currentFeedback = null;
-    renderEvaluationState();
-    if (state.recognition) {
-      setRecognitionLanguage(state.settings.recognitionLang || 'en-US', false);
-    }
+    // Wersja v13: aplikacja nie rozpoznaje już treści odpowiedzi użytkownika.
+    // Mikrofon służy wyłącznie do krótkich komend sterujących po angielsku.
     if (forceStart) {
       state.listening = true;
       safeStartRecognition();
     }
-    setStatus('Tryb odpowiedzi angielskiej. Powiedz odpowiedź po angielsku albo użyj komendy: check, next, back, repeat, add, list, start, stop, clear, mic.');
+    setStatus('Rozpoznawanie odpowiedzi jest wyłączone. Powiedz komendę: check, next, back, repeat, add, list, start, stop, clear albo mic.');
   }
 
   function clearCurrentAnswer() {
     resetCurrentAnswer();
     renderLearning();
-    setStatus('Wyczyszczono rozpoznaną odpowiedź. Możesz powiedzieć ją jeszcze raz.');
+    setStatus('Wyczyszczono status rozpoznanej komendy.');
   }
 
   function resetCurrentAnswer() {
     state.recognizedAnswer = '';
     state.currentFeedback = null;
-    el.recognizedText.textContent = '—';
+    if (el.recognizedText) el.recognizedText.textContent = '—';
     renderEvaluationState();
   }
 
@@ -1423,21 +1423,17 @@
 
     const command = detectCommand(text);
     if (command && finalText) {
+      if (el.recognizedText) el.recognizedText.textContent = normalizeCommand(text);
       runCommand(command);
       return;
     }
 
+    // Wersja v13: ignorujemy dłuższe wypowiedzi użytkownika, bo aplikacja nie ocenia tłumaczenia.
+    // Rozpoznawanie mowy ma służyć tylko krótkim komendom sterującym.
     if (finalText) {
-      state.recognizedAnswer = `${state.recognizedAnswer} ${finalText}`.trim();
-      el.recognizedText.textContent = state.recognizedAnswer || '—';
-      state.currentFeedback = null;
-      renderEvaluationState();
-      setStatus('Odpowiedź zapisana. Powiedz „check” albo kliknij Sprawdź/check.');
-      return;
+      if (el.recognizedText) el.recognizedText.textContent = 'zignorowano: brak komendy';
+      setStatus('Zignorowano wypowiedź niebędącą komendą. Dostępne komendy: check, next, back, repeat, add, list, start, stop, clear, mic.');
     }
-
-    const preview = `${state.recognizedAnswer} ${interimText}`.trim();
-    el.recognizedText.textContent = preview || '—';
   }
 
   function stripPolishDiacritics(text) {
@@ -1467,8 +1463,7 @@
     repeat: ['repeat', 'again', 'say again', 'one more'],
     addReview: ['add', 'save', 'add review', 'save review'],
     showReview: ['list', 'review', 'show list', 'review list'],
-    captureAnswer: ['answer', 'my answer', 'speak', 'talk'],
-    clearAnswer: ['clear', 'delete', 'clear answer', 'delete answer'],
+    clearAnswer: ['clear', 'delete', 'clear command', 'delete command'],
     start: ['start', 'begin'],
     stop: ['stop', 'pause'],
     mic: ['mic', 'microphone']
@@ -1510,7 +1505,6 @@
       next: nextPair,
       prev: prevPair,
       repeat: repeatCurrent,
-      captureAnswer: () => prepareForEnglishAnswer(true),
       clearAnswer: clearCurrentAnswer,
       addReview: addCurrentToReview,
       showReview: scrollToReview,
@@ -1741,7 +1735,7 @@
     saveProgress();
     setStatus(state.settings.carMode
       ? 'Start w trybie samochodowym. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
-      : 'Start. Wypowiedz odpowiedź po angielsku, a potem powiedz „check” albo kliknij Sprawdź/check. Mikrofon jest utrzymywany jako włączony, o ile przeglądarka na to pozwala.');
+      : 'Start. Powiedz w myślach albo na głos odpowiedź po angielsku, a potem użyj komendy „check”. Program rozpoznaje tylko komendy sterujące.');
     speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
@@ -1767,16 +1761,13 @@
 
     state.revealed = true;
     clearCarCheckTimer();
-    state.currentFeedback = evaluateCurrentAnswer(pair);
+    state.currentFeedback = null;
 
-    if (state.settings.autoLanguageSwitch) setRecognitionLanguage('pl-PL', true);
     renderLearning();
 
-    const feedbackText = state.currentFeedback ? state.currentFeedback.spokenComment : '';
-    setStatus('Sprawdź swoją odpowiedź. Program czeka na „next” lub inną angielską komendę.');
+    setStatus('Sprawdź swoją odpowiedź. Program nie ocenia wypowiedzi. Powiedz „next”, aby przejść dalej.');
     speakMany([
-      { text: pair.en, lang: 'en-US' },
-      { text: feedbackText, lang: 'pl-PL' }
+      { text: pair.en, lang: 'en-US' }
     ], scheduleCarNextPair);
   }
 
@@ -1802,7 +1793,7 @@
     ensureListeningDuringStudy();
     setStatus(state.settings.carMode
       ? 'Kolejna para. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
-      : 'Kolejna para. Podaj odpowiedź po angielsku, a potem powiedz „check”.');
+      : 'Kolejna para. Samodzielnie odpowiedz po angielsku, a potem powiedz „check”.');
     speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
@@ -1828,7 +1819,7 @@
     ensureListeningDuringStudy();
     setStatus(state.settings.carMode
       ? 'Poprzednia para. Odpowiedz po angielsku; aplikacja sama sprawdzi po ustawionym czasie.'
-      : 'Poprzednia para. Podaj odpowiedź po angielsku, a potem powiedz „check”.');
+      : 'Poprzednia para. Samodzielnie odpowiedz po angielsku, a potem powiedz „check”.');
     speakPolishPrompt(pair, scheduleCarAnswerCheck);
   }
 
@@ -2476,21 +2467,8 @@
   }
 
   function renderEvaluationState() {
-    if (!el.evaluationBox) return;
-    if (!state.revealed || !state.currentFeedback) {
-      el.evaluationBox.hidden = true;
-      return;
-    }
-
-    const feedback = state.currentFeedback;
-    el.evaluationBox.hidden = false;
-    el.evaluationScore.textContent = `${feedback.score}%`;
-    el.evaluationComment.textContent = feedback.comment;
-    el.evaluationModeLabel.textContent = feedback.modeLabel || getEvaluationModeLabel(state.settings.evaluationMode);
-    el.missingWords.textContent = feedback.missing.length ? feedback.missing.join(', ') : 'brak';
-    el.extraWords.textContent = feedback.extra.length ? feedback.extra.join(', ') : 'brak';
-    el.orderInfo.textContent = feedback.orderInfo || '—';
-    el.suggestionInfo.textContent = feedback.suggestion || '—';
+    // Wersja v13: ocena odpowiedzi jest usunięta z interfejsu.
+    if (el.evaluationBox) el.evaluationBox.hidden = true;
   }
 
   function renderLoadedPairs() {

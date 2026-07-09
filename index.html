@@ -17,7 +17,7 @@
   <header class="app-header compact-app-header">
     <div class="brand-line">
       <h1>Angielski Głosowo</h1>
-      <button class="info-button" type="button" aria-label="Informacja o aplikacji" title="Prosta nauka słówek i zdań: polski → Twoja odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki, krótkie komendy głosowe, listę powtórek, zapamiętywanie ostatniej pozycji i opcję niewygaszania ekranu.">i</button>
+      <button class="info-button" type="button" aria-label="Informacja o aplikacji" title="Prosta nauka słówek i zdań: polski → samodzielna odpowiedź → sprawdzenie po angielsku. Obsługuje polskie znaki, krótkie komendy głosowe, listę powtórek, zapamiętywanie ostatniej pozycji i opcję niewygaszania ekranu.">i</button>
     </div>
     <span id="installStatus" class="pill">PWA</span>
   </header>
@@ -61,8 +61,8 @@
         <div id="polishText" class="main-text">Zaimportuj listę i naciśnij Start.</div>
       </div>
 
-      <div class="answer-box priority-box">
-        <div class="label">Rozpoznana odpowiedź użytkownika</div>
+      <div class="answer-box priority-box command-status-box">
+        <div class="label">Ostatnia rozpoznana komenda</div>
         <div id="recognizedText" class="recognized-text">—</div>
       </div>
 
@@ -80,7 +80,7 @@
 
       <div id="status" class="status" role="status">Gotowe.</div>
 
-      <div class="answer-box evaluation-box" id="evaluationBox" hidden>
+      <div class="answer-box evaluation-box hidden-setting" id="evaluationBox" hidden style="display:none">
         <div class="label">Ocena odpowiedzi</div>
         <div class="evaluation-score" id="evaluationScore">—</div>
         <div id="evaluationComment" class="evaluation-comment">—</div>
@@ -97,7 +97,7 @@
         <summary>Dodatkowe przyciski i komendy</summary>
         <div class="button-grid secondary-buttons">
           <button id="startBtn" class="btn btn-primary">Start</button>
-          <button id="captureAnswerBtn" class="btn">Odpowiedź EN / answer</button>
+          <button id="captureAnswerBtn" class="btn hidden-setting" style="display:none">Odpowiedź EN / answer</button>
           <button id="clearAnswerBtn" class="btn">Wyczyść / clear</button>
           <button id="prevBtn" class="btn">Poprzednie / back</button>
           <button id="repeatBtn" class="btn">Powtórz / repeat</button>
@@ -105,8 +105,8 @@
           <button id="stopBtn" class="btn btn-danger">Stop</button>
         </div>
         <div class="commands-text">
-          <p><strong>Komendy głosowe po angielsku:</strong> check, next, back, repeat, add, list, answer, clear, start, stop, mic.</p>
-          <p>Komendy zapasowe: test/show = sprawdź, go/forward = następne, previous = poprzednie, again = powtórz, save = dodaj, review = lista. Rozpoznawanie pracuje stale w języku angielskim.</p>
+          <p><strong>Komendy głosowe po angielsku:</strong> check, next, back, repeat, add, list, start, stop, clear, mic.</p>
+          <p>Komendy zapasowe: test/show = sprawdź, go/forward = następne, previous = poprzednie, again = powtórz, save = dodaj, review = lista. Program ignoruje dłuższe wypowiedzi niebędące komendą.</p>
         </div>
       </details>
     </section>
@@ -182,13 +182,13 @@
         <label>
           Język rozpoznawania mowy
           <select id="recognitionLang">
-            <option value="en-US">English US — komendy i odpowiedzi</option>
-            <option value="en-GB">English UK — komendy i odpowiedzi</option>
+            <option value="en-US">English US — komendy sterujące</option>
+            <option value="en-GB">English UK — komendy sterujące</option>
           </select>
-          <span class="small-info">Program nie przełącza już języka rozpoznawania. Komendy sterujące są po angielsku.</span>
+          <span class="small-info">Program nasłuchuje tylko angielskich komend sterujących. Dłuższe wypowiedzi niebędące komendą są ignorowane.</span>
         </label>
 
-        <label>
+        <label class="hidden-setting" style="display:none">
           Tryb oceny odpowiedzi po angielsku
           <select id="evaluationMode">
             <option value="none">BRAK — nie oceniaj wypowiedzi</option>
